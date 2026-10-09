@@ -37,6 +37,7 @@ test('sessions add up, and achievements follow from the totals', () => {
   expect(p.unlocked).toContain('bat-slayer')
   expect(p.unlocked).not.toContain('devoted')
   expect(report(all, p)).toContain('Achievements (2 of 14)')
+  expect(report(all, p)).toContain('Compactions           0 (castle tier 1 of 5)')
 })
 
 test('test commands are recognised', () => {

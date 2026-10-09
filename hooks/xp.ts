@@ -177,6 +177,7 @@ export function report(s: Stats, p: Profile): string {
     row('Subagents finished', `${s.bats}`),
     row('Warm-cache replies', `${s.warm}`),
     row('Turns under 60%', `${s.tidy}`),
+    row('Compactions', `${s.compacts ?? 0} (castle tier ${p.castleTier} of 5)`),
     '',
     `Achievements (${got.size} of ${ACHIEVEMENTS.length})`,
     ...ACHIEVEMENTS.map(a => `  ${got.has(a.id) ? '✓' : '·'} ${a.name.padEnd(20)}${a.how}`),
