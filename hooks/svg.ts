@@ -332,19 +332,30 @@ function flame(size: 'small' | 'medium' | 'big', cx: number, baseY: number, dela
   return `<g class="fa" ${style}>${sprite(rows, FIRE, x, y, px)}</g><g class="fb" ${style}>${sprite(mirrored, FIRE, x, y, px)}</g>`
 }
 
-/** The castle on the right edge of the band: towers, lit windows, a few stars; it burns as the context fills. */
-export function castleSvg(percent = 0): { source: string; alt: string; width: number; height: number } {
+/** The castle's tiers: each /clear raises it one, up to five. */
+export const MAX_TIER = 5
+
+/**
+ * The castle on the right edge of the band: towers, lit windows, a few stars. It grows with its tier (a lone
+ * tower at 1; the left and right towers at 2 and 3; the keep and banners at 4; an outer watchtower and a gold
+ * crest at 5) and burns as the context fills.
+ */
+export function castleSvg(percent = 0, tier = 4): { source: string; alt: string; width: number; height: number } {
   const stone = '#3d2f52'
   const DY = 20 // room above the towers for the flames
-  const towers: [number, number, number, number][] = [
-    // x, width, top of the wall, spire tip
-    [34, 14, 24, 12],
-    [86, 20, 12, 0],
-    [146, 14, 22, 10],
-    [196, 26, 30, 30],
+  const t = Math.max(1, Math.min(MAX_TIER, Math.round(tier)))
+  type Tower = { x: number; w: number; top: number; tip: number; from: number }
+  const all: Tower[] = [
+    { x: 6, w: 12, top: 20, tip: 8, from: 5 }, // outer watchtower
+    { x: 34, w: 14, top: 24, tip: 12, from: 2 }, // left tower
+    { x: 86, w: 20, top: 12, tip: 0, from: 1 }, // main tower
+    { x: 146, w: 14, top: 22, tip: 10, from: 3 }, // right tower
+    { x: 196, w: 26, top: 30, tip: 30, from: 4 }, // keep, with battlements
   ]
+  const towers = all.filter(tw => t >= tw.from)
+  const has = (from: number) => t >= from
   const shapes = towers
-    .map(([x, w, top, tip]) => {
+    .map(({ x, w, top, tip }) => {
       const merlons = Array.from({ length: Math.floor(w / 5) }, (_, i) => `<rect x="${x + i * 5}" y="${top - 3}" width="3" height="3"/>`).join('')
       const spire = tip < top ? `<polygon points="${x - 2},${top - 3} ${x + w / 2},${tip} ${x + w + 2},${top - 3}"/>` : merlons
       return `<rect x="${x}" y="${top}" width="${w}" height="${52 - top}"/>${spire}`
@@ -355,27 +366,39 @@ export function castleSvg(percent = 0): { source: string; alt: string; width: nu
     .map(([x, y, o]) => `<rect x="${x}" y="${y + DY}" width="1.6" height="1.6" fill="#e8dcc0" opacity="${o}"/>`)
     .join('')
 
+  // Banners from tier 4 on the side spires; a gold crest on the main spire at tier 5.
+  const banner = (cx: number, tipY: number) =>
+    `<rect x="${cx}" y="${tipY - 9}" width="1" height="9" fill="#8e8597"/><rect x="${cx + 1}" y="${tipY - 9}" width="6" height="4" fill="#c8283f"/><rect x="${cx + 1}" y="${tipY - 9}" width="6" height="1" fill="#d4a017"/>`
+  const banners = has(4) ? banner(41, 12) + banner(153, 10) + (has(5) ? banner(12, 8) : '') : ''
+  const crest = has(5) ? `<polygon points="96,-8 99,-4 96,0 93,-4" fill="#d4a017"/><rect x="95" y="-6" width="2" height="4" fill="#fff3c4"/>` : ''
+
   const fire = fireLevel(percent)
   // The windows turn from candle-gold to red once half the context is used, before any fire.
   const lit = percent >= 50 ? '#e0475b' : '#e3b341'
-  const windows = `<rect x="94" y="22" width="3" height="5" fill="${lit}"/><rect x="40" y="32" width="2" height="4" fill="${lit}" opacity=".55"/><rect x="151" y="30" width="2" height="4" fill="${lit}" opacity="${fire === 'none' ? 0 : 0.7}"/>`
+  const windows =
+    `<rect x="94" y="22" width="3" height="5" fill="${lit}"/>` +
+    (has(2) ? `<rect x="40" y="32" width="2" height="4" fill="${lit}" opacity=".55"/>` : '') +
+    (has(3) ? `<rect x="151" y="30" width="2" height="4" fill="${lit}" opacity="${fire === 'none' ? 0 : 0.7}"/>` : '') +
+    (has(5) ? `<rect x="11" y="28" width="2" height="4" fill="${lit}" opacity=".55"/>` : '')
 
-  // Flames sit on the spire tips (and the keep's battlements for the big fire).
+  // Flames sit on the spire tips of the towers that stand (and the keep's battlements for the big fire).
   const main = 86 + 10
   const left = 34 + 7
   const right = 146 + 7
+  const side = (size: 'small' | 'medium' | 'big', delay: number) =>
+    (has(2) ? flame(size, left, 14, delay) : '') + (has(3) ? flame(size, right, 12, delay + 0.1) : '')
   const flames =
     fire === 'small' ? flame('small', main, 2, 0)
-    : fire === 'medium' ? flame('medium', main, 2, 0) + flame('small', left, 14, 0.1) + flame('small', right, 12, 0.2)
-    : fire === 'big' ? flame('big', main, 2, 0) + flame('medium', left, 14, 0.1) + flame('medium', right, 12, 0.2) + flame('small', 202, 27, 0.15) + flame('small', 214, 27, 0.05)
+    : fire === 'medium' ? flame('medium', main, 2, 0) + side('small', 0.1)
+    : fire === 'big' ? flame('big', main, 2, 0) + side('medium', 0.1) + (has(4) ? flame('small', 202, 27, 0.15) + flame('small', 214, 27, 0.05) : '') + (has(5) ? flame('small', 12, 10, 0.12) : '')
     : ''
   const glow = fire === 'big'
     ? `<defs><radialGradient id="blaze" cx="50%" cy="100%" r="70%"><stop offset="0%" stop-color="#d8261c" stop-opacity=".45"/><stop offset="100%" stop-color="#d8261c" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="240" height="${60 + DY}" fill="url(#blaze)"/>`
     : ''
   const style = `<style>.fa{animation:fa .3s steps(1) infinite}.fb{opacity:0;animation:fb .3s steps(1) infinite}@keyframes fa{0%,49.9%{opacity:1}50%,100%{opacity:0}}@keyframes fb{0%,49.9%{opacity:0}50%,100%{opacity:1}}@media (prefers-reduced-motion:reduce){.fa{animation:none}.fb{animation:none;opacity:0}}rect{shape-rendering:crispEdges}</style>`
   const H = 60 + DY
-  const source = `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(240 * CASTLE_SCALE)}" height="${Math.round(H * CASTLE_SCALE)}" viewBox="0 0 240 ${H}">${style}${glow}${stars}<g transform="translate(0 ${DY + 8})"><g fill="${stone}" shape-rendering="crispEdges">${wall}${shapes}</g>${windows}${flames}</g></svg>`
-  const alt = fire === 'none' ? 'Castle at night' : `Castle on fire (${fire}): context at ${percent}%`
+  const source = `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(240 * CASTLE_SCALE)}" height="${Math.round(H * CASTLE_SCALE)}" viewBox="0 0 240 ${H}">${style}${glow}${stars}<g transform="translate(0 ${DY + 8})"><g fill="${stone}" shape-rendering="crispEdges">${wall}${shapes}</g>${banners}${crest}${windows}${flames}</g></svg>`
+  const alt = `Castle, tier ${t} of ${MAX_TIER}` + (fire === 'none' ? '' : `, on fire (${fire}): context at ${percent}%`)
 
   return { source, alt, width: Math.round(240 * CASTLE_SCALE), height: Math.round(H * CASTLE_SCALE) }
 }

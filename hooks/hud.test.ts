@@ -137,3 +137,13 @@ test('edits count what really changed', () => {
   expect(editLines('Write', { content: 'x\ny' }, { type: 'update', originalFile: 'x\ny', structuredPatch: [] })).toEqual({ added: 0, removed: 0 })
   expect(editLines('Write', { content: 'x\ny' }, { type: 'create', originalFile: null, structuredPatch: [] })).toEqual({ added: 2, removed: 0 })
 })
+
+test('castle grows with its tier', () => {
+  const towers = (t: number) => castleSvg(0, t).source.match(/<polygon points=/g)?.length ?? 0
+  expect(towers(1)).toBe(1)
+  expect(towers(2)).toBe(2)
+  expect(towers(3)).toBe(3)
+  expect(towers(5)).toBe(5) // four spires and the crest
+  expect(castleSvg(0, 4).source).toContain('#c8283f')
+  expect(castleSvg(0, 9).alt).toContain('tier 5 of 5')
+})

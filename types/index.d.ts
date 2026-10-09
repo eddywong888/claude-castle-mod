@@ -2,7 +2,7 @@ export type Limit = { kind: string; percentUsed: number; resetsAt?: string }
 export type Usage = { usd?: number; tokens?: number; window: number; percent?: number; limits: Limit[] }
 export type LastTurn = { ms: number; out: number }
 export type Lines = { added: number; removed: number }
-export type Profile = { level: number; title: string; into: number; need: number; xp: number; streak: number; unlocked: string[] }
+export type Profile = { level: number; title: string; into: number; need: number; xp: number; streak: number; unlocked: string[]; castleTier: number }
 export type Cache = { read: number; written: number; uncached: number; at: number; model?: string; ttlMs?: number }
 
 declare module 'claude-code' {

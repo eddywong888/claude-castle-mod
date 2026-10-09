@@ -73,3 +73,11 @@ test('streak achievements stay earned after a missed day', () => {
   expect(p.streak).toBe(0)
   expect(p.unlocked).toContain('devoted')
 })
+
+test('each /clear raises the castle a tier, up to five', () => {
+  expect(profileOf(emptyStats(), '2026-10-09').castleTier).toBe(1)
+  expect(profileOf({ ...emptyStats(), clears: 2 }, '2026-10-09').castleTier).toBe(3)
+  expect(profileOf({ ...emptyStats(), clears: 9 }, '2026-10-09').castleTier).toBe(5)
+  const old = { xp: 0, turns: 0, lines: 0, tests: 0, bats: 0, warm: 0, tidy: 0, night: 0, days: [] }
+  expect(addStats(old, { ...emptyStats(), clears: 1 }).clears).toBe(1)
+})

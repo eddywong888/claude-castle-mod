@@ -249,6 +249,14 @@ export const register: Register = on => {
   on('session.end', async ($, e, next) => {
     const result = await next(e)
     await saveMine($).catch(() => undefined) // keep XP earned since the last refresh
+    if (e.reason === 'clear') {
+      // A fresh start raises the castle a tier, up to five.
+      const before = (await read($, profile))?.castleTier ?? 1
+      mine = { ...mine, clears: (mine.clears ?? 0) + 1 }
+      dirty = true
+      if (before < 5) $.ui.toast(`Castle raised to tier ${before + 1} of 5`)
+      void syncProfile($)
+    }
     if (e.reason === 'clear' || e.reason === 'resume') {
       // Until the new conversation's baseline is read, cost changes count as nothing rather than as old spend.
       lastUsd = undefined
@@ -384,7 +392,7 @@ export const register: Register = on => {
 
     const { Box, Svg } = $.ui.resolve(e)
     const svg = buildSvg({ usage: u, cache: c, bats, now, prevPercent: shownPercent, mode: 'dark', windowUsd: spent ?? undefined, lastTurn: turn, lines: changed, startedAt: began || undefined, profile: prof })
-    const castle = castleSvg(pct)
+    const castle = castleSvg(pct, prof?.castleTier ?? 1)
     const widest = Math.max(0, ...svg.parts.map(p => p.width))
     shownPercent = pct
 

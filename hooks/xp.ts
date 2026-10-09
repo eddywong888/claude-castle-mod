@@ -11,9 +11,11 @@ export type Stats = {
   tidy: number
   night: number
   days: string[]
+  /** Times this session ran /clear: each raises the castle a tier. Absent in records saved before 0.5. */
+  clears?: number
 }
 
-export const emptyStats = (): Stats => ({ xp: 0, turns: 0, lines: 0, tests: 0, bats: 0, warm: 0, tidy: 0, night: 0, days: [] })
+export const emptyStats = (): Stats => ({ xp: 0, turns: 0, lines: 0, tests: 0, bats: 0, warm: 0, tidy: 0, night: 0, days: [], clears: 0 })
 
 export function addStats(a: Stats, b: Stats): Stats {
   return {
@@ -26,6 +28,7 @@ export function addStats(a: Stats, b: Stats): Stats {
     tidy: a.tidy + b.tidy,
     night: a.night + b.night,
     days: [...new Set([...a.days, ...b.days])].sort(),
+    clears: (a.clears ?? 0) + (b.clears ?? 0),
   }
 }
 
@@ -118,7 +121,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'lord', name: 'Lord of the Castle', how: 'Reach level 50', met: (_s, level) => level >= 50 },
 ]
 
-export type Profile = Level & { xp: number; streak: number; unlocked: string[] }
+export type Profile = Level & { xp: number; streak: number; unlocked: string[]; castleTier: number }
 
 export function profileOf(s: Stats, today: string): Profile {
   const lv = levelOf(s.xp)
@@ -126,7 +129,8 @@ export function profileOf(s: Stats, today: string): Profile {
   // Achievements read the longest streak ever, so a missed day never takes one back.
   const best = Math.max(streak, longestStreak(s.days))
   const unlocked = ACHIEVEMENTS.filter(a => a.met(s, lv.level, best)).map(a => a.id)
-  return { ...lv, xp: s.xp, streak, unlocked }
+  // The castle starts at tier 1 and rises one tier per /clear, up to 5.
+  return { ...lv, xp: s.xp, streak, unlocked, castleTier: Math.min(5, 1 + (s.clears ?? 0)) }
 }
 
 // A test runner at the start of a command: `npm test`, `pnpm run test`, `pytest`, `go test`, `npx vitest`.
