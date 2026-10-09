@@ -320,8 +320,9 @@ export const register: Register = on => {
       const t = await $.clock.now()
       // A total below the last one means the session's cost started over (a /clear): all of it is new.
       const delta = lastUsd === undefined ? 0 : e.cost.usd < lastUsd ? e.cost.usd : e.cost.usd - lastUsd
-      lastUsd = e.cost.usd
+      // Move the baseline only once the delta is saved: a failed write is retried with the next measurement.
       if (delta > 0) await $.store.set(spendKey(t, myId, spendSeq++), delta)
+      lastUsd = e.cost.usd
       await resum($)
     }
 
@@ -399,16 +400,21 @@ export const register: Register = on => {
       const tidy = (live.context.percent ?? 0) < 60
       const isNight = new Date(t).getHours() < 4
       const day = dayKey(t)
-      mine = {
-        ...mine,
-        xp: mine.xp + turnXp({ lines: turnLines, warm, tidy }),
-        turns: mine.turns + 1,
-        lines: mine.lines + turnLines,
-        warm: mine.warm + (warm ? 1 : 0),
-        tidy: mine.tidy + (tidy ? 1 : 0),
-        night: mine.night + (isNight ? 1 : 0),
-        days: mine.days.includes(day) ? mine.days : [...mine.days, day],
-      }
+      // Only an answered turn earns XP, counts as finished and marks the day; a cancelled or failed one
+      // still counts its lines changed, its cost and its cache.
+      const answered = e.reason === 'answer'
+      mine = answered
+        ? {
+            ...mine,
+            xp: mine.xp + turnXp({ lines: turnLines, warm, tidy }),
+            turns: mine.turns + 1,
+            lines: mine.lines + turnLines,
+            warm: mine.warm + (warm ? 1 : 0),
+            tidy: mine.tidy + (tidy ? 1 : 0),
+            night: mine.night + (isNight ? 1 : 0),
+            days: mine.days.includes(day) ? mine.days : [...mine.days, day],
+          }
+        : { ...mine, lines: mine.lines + turnLines }
       turnLines = 0
       dirty = true
       void syncProfile($) // the turn doesn't wait for the profile

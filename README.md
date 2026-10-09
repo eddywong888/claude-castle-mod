@@ -65,7 +65,7 @@ On a narrow window the sections wrap onto more rows, each at full size. The cast
 
 | You do | XP |
 |---|---|
-| Finish a turn | +10 |
+| Finish a turn (a cancelled one doesn't count) | +10 |
 | Change lines in that turn | +1 per 10 lines, up to +50 |
 | Reply while the cache is warm | +5 |
 | Finish a turn under 60% context | +5 |

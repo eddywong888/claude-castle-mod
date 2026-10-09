@@ -67,6 +67,8 @@ test('test commands are recognised', () => {
   expect(isTestCommand('echo ok # && npm test')).toBe(false)
   expect(isTestCommand('pytest "--collect-only"')).toBe(false)
   expect(isTestCommand('npm test # --help documents the command')).toBe(true)
+  expect(isTestCommand('cargo test --no-run')).toBe(false)
+  expect(isTestCommand('pytest --setup-plan')).toBe(false)
   expect(isTestCommand("pytest -k 'a or b' --co")).toBe(false)
   expect(isTestCommand('npm test # run the suite')).toBe(true)
 })
