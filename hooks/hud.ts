@@ -145,7 +145,7 @@ export function linesOf(tool: string, input: Record<string, unknown>): { added: 
   return { added: 0, removed: 0 }
 }
 
-export type CacheState = { read: number; written: number; uncached: number; at: number; model?: string; ttlMs?: number }
+export type CacheState = { read: number; written: number; uncached: number; at: number; model?: string; ttlMs?: number; rebased?: boolean }
 
 const FIVE_MIN = 5 * 60e3
 
@@ -159,6 +159,7 @@ export function nextCache(
   u: { cache_read_input_tokens: number; cache_creation_input_tokens: number; input_tokens: number; model?: string },
   at: number,
   coldStart = false,
+  startedAt = at,
 ): CacheState | null {
   const read = u.cache_read_input_tokens
   const written = u.cache_creation_input_tokens
@@ -168,8 +169,10 @@ export function nextCache(
   const sameModel = !prev?.model || !u.model || prev.model === u.model
   // A different model has its own cache: start again from the default lifetime.
   let ttlMs = sameModel ? (prev?.ttlMs ?? CACHE_TTL_MS) : CACHE_TTL_MS
-  if (prev?.at && sameModel) {
-    const gap = at - prev.at
+  // After a compaction the cached prefix changed: the next rewrite says nothing about the cache's life.
+  if (prev?.at && sameModel && !prev.rebased) {
+    // The idle gap is from the last reply to when this turn started: its reads happened then, not at its end.
+    const gap = startedAt - prev.at
     if (gap > FIVE_MIN && gap < CACHE_TTL_MS) {
       if (readWhenStarted > 0) ttlMs = CACHE_TTL_MS
       else if (written > 0) ttlMs = FIVE_MIN

@@ -64,6 +64,7 @@ test('test commands are recognised', () => {
   expect(isTestCommand("pytest -k 'slow and db'")).toBe(true)
   expect(isTestCommand('npm test "unclosed')).toBe(false)
   expect(isTestCommand('echo ok # && npm test')).toBe(false)
+  expect(isTestCommand('pytest "--collect-only"')).toBe(false)
   expect(isTestCommand('npm test # run the suite')).toBe(true)
 })
 

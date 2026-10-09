@@ -156,3 +156,15 @@ test('a cold start keeps its real cache counts but learns the short life', () =>
   expect(cold?.ttlMs).toBe(5 * 60e3)
   expect(nextCache(first, u, now + 20 * 60e3, false)?.ttlMs).toBe(60 * 60e3)
 })
+
+test('cache life is learned from when a turn started, and not just after a compaction', () => {
+  const u = (read: number, written: number) => ({ cache_read_input_tokens: read, cache_creation_input_tokens: written, input_tokens: 10, model: 'm' })
+  const short = { ...nextCache(null, u(0, 500), now)!, ttlMs: 5 * 60e3 }
+  // Started 4 minutes after the last reply (cache still warm), finished at 6: no evidence of an hour-long cache.
+  expect(nextCache(short, u(400, 10), now + 6 * 60e3, false, now + 4 * 60e3)?.ttlMs).toBe(5 * 60e3)
+  // Started 20 minutes after and still read: the cache lasts an hour.
+  expect(nextCache(short, u(400, 10), now + 21 * 60e3, false, now + 20 * 60e3)?.ttlMs).toBe(60 * 60e3)
+  // After a compaction, a cold rewrite 20 minutes later teaches nothing.
+  const hour = { ...short, ttlMs: 60 * 60e3, rebased: true }
+  expect(nextCache(hour, u(0, 500), now + 21 * 60e3, true, now + 20 * 60e3)?.ttlMs).toBe(60 * 60e3)
+})

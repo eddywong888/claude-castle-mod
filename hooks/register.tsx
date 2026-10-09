@@ -57,6 +57,8 @@ let others = new Map<string, Stats>()
 let othersAt = 0
 const OTHERS_EVERY_MS = 5 * 60e3
 let turnLines = 0
+// When the main conversation's current turn started (turn.start fires for the main loop only).
+let turnStartedAt = 0
 let dirty = false
 // The level and achievements last shown, to toast what is new; null until the first profile is read.
 let known: { level: number; unlocked: Set<string> } | null = null
@@ -289,6 +291,9 @@ export const register: Register = on => {
       dirty = true
       if (before < 5) $.ui.toast(`Castle rebuilt to tier ${before + 1} of 5`)
       void syncProfile($)
+      // The cached prefix changed: the next turn's rewrite isn't evidence of an expired cache.
+      const c = await read($, cache)
+      if (c) await update($, cache, () => ({ ...c, rebased: true }))
       // The compacted size comes with the result: show it now, which also puts the fire out. The engine
       // installs the new conversation after this hook returns, so reading the session here would be too early.
       const u = await read($, usage)
@@ -300,6 +305,12 @@ export const register: Register = on => {
 
     return result
   }).catch(($, e, next) => next(e)) // counting failed: the compaction still goes through
+
+  on('turn.start', async ($, e, next) => {
+    turnStartedAt = await $.clock.now()
+
+    return next(e)
+  })
 
   on('session.measure', async ($, e, next) => {
     const u = toUsage(e)
@@ -403,7 +414,7 @@ export const register: Register = on => {
       const at = await $.clock.now()
       const prev = await read($, cache)
       // The real counts are kept for the hit rate; `rebuilt` only steers what the lifetime learns.
-      const next2 = nextCache(prev?.at ? prev : null, u, at, rebuilt)
+      const next2 = nextCache(prev?.at ? prev : null, u, at, rebuilt, turnStartedAt || at)
       if (next2 !== prev) await update($, cache, () => next2)
     }
 
