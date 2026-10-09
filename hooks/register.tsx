@@ -209,6 +209,12 @@ async function deriveProfile($: EngineInterface, everyone = false): Promise<Stat
   return all
 }
 
+/** Re-reads the context and limits now, rather than waiting for the next turn's measurement. */
+async function refreshUsage($: EngineInterface) {
+  const now = await $.session.usage()
+  await update($, usage, () => toUsage(now))
+}
+
 /** Starts this conversation's own figures over: on load, and after /clear. */
 async function startOver($: EngineInterface) {
   const now = await $.session.usage()
@@ -273,6 +279,8 @@ export const register: Register = on => {
       dirty = true
       if (before < 5) $.ui.toast(`Castle rebuilt to tier ${before + 1} of 5`)
       void syncProfile($)
+      // The compacted context is small again: show it now, which also puts the fire out.
+      await refreshUsage($)
     }
 
     return result

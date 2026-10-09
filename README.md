@@ -53,7 +53,7 @@ As the context fills, the castle reacts: its windows turn from gold to red at 50
 
 ### Build up the castle
 
-Every compaction raises the castle one tier, up to five: your own `/compact`, or the one Claude Code runs itself when the context is full. The fire burns as the context fills, and compacting rebuilds the castle bigger. It starts with two towers, gains its right tower, then the keep, then banners, and at tier 5 an outer watchtower and a gold crest on the main spire. The tier is kept across sessions.
+Every compaction raises the castle one tier, up to five: your own `/compact`, or the one Claude Code runs itself when the context is full. The fire burns as the context fills, and compacting puts the fire out and rebuilds the castle bigger. It starts with two towers, gains its right tower, then the keep, then banners, and at tier 5 an outer watchtower and a gold crest on the main spire. The tier is kept across sessions.
 
 ![The castle at tiers 1 to 5](screenshots/tiers.png)
 
