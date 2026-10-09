@@ -321,9 +321,8 @@ export function fireLevel(percent: number): 'none' | 'small' | 'medium' | 'big' 
 }
 
 /** A flickering flame, its base centered at (cx, baseY): two frames, the second mirrored. */
-function flame(size: 'small' | 'medium' | 'big', cx: number, baseY: number, delay: number): string {
+function flame(size: 'small' | 'medium' | 'big', cx: number, baseY: number, delay: number, px = 2): string {
   const rows = FLAMES[size]
-  const px = 2
   const w = (rows[0]?.length ?? 0) * px
   const x = cx - w / 2
   const y = baseY - rows.length * px
@@ -406,7 +405,8 @@ export function castleSvg(percent = 0, tier = 4): { source: string; alt: string;
   const flames =
     fire === 'small' ? flame('small', main, 2, 0) + flame('small', 95, 27, 0.1)
     : fire === 'medium' ? flame('medium', main, 2, 0) + side('small', 0.1) + windowFire('small', 0.05) + wallFire(['small', 'small'])
-    : fire === 'big' ? flame('big', main, 2, 0) + side('medium', 0.1) + windowFire('medium', 0.05) + wallFire(['medium', 'medium', 'small']) + (has(KEEP) ? flame('small', 202, 27, 0.15) + flame('small', 214, 27, 0.05) : '') + (has(OUTER) ? flame('small', 12, 10, 0.12) : '')
+    // At 90% fewer fires but bigger: the main tower ablaze top to bottom, and one great fire on the wall.
+    : fire === 'big' ? flame('big', main, 2, 0) + side('medium', 0.1) + flame('big', 95, 30, 0.05, 2.6) + flame('big', 124, 38, 0.12, 3)
     : ''
   const glow = fire === 'big'
     ? `<defs><radialGradient id="blaze" cx="50%" cy="100%" r="70%"><stop offset="0%" stop-color="#d8261c" stop-opacity=".45"/><stop offset="100%" stop-color="#d8261c" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="240" height="${60 + DY}" fill="url(#blaze)"/>`
