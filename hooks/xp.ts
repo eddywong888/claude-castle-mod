@@ -138,7 +138,9 @@ const TEST_RUNNER = /^((npm|pnpm|yarn|bun)\s+(run\s+)?test\b|(npx\s+|bunx\s+|pyt
  * (`||`, `;`, a pipe, a background `&`, a newline, a subshell) doesn't count.
  */
 export function isTestCommand(command: string): boolean {
-  const plain = command.replace(/\d*>&\d+/g, '') // `2>&1` only redirects output
+  // Quoted text is an argument, not a command: `echo "cd app && npm test"` runs no tests.
+  const plain = command.replace(/"[^"]*"|'[^']*'/g, 'Q').replace(/\d*>&\d+/g, '') // `2>&1` only redirects output
+  if (/["']/.test(plain)) return false // an unbalanced quote: can't tell what runs
   if (/\|\||;|\||\n|`|\$\(|(^|[^&])&(?!&)/.test(plain)) return false
   // Runs that list, collect or explain tests succeed without running any.
   if (/(^|\s)(--collect-only|--co|--list-tests|--listTests|-list|--list|--help|-h|--version|--dry-run|--passWithNoTests)(\s|=|$)/.test(plain)) return false

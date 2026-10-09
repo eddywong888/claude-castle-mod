@@ -60,6 +60,9 @@ test('test commands are recognised', () => {
   expect(isTestCommand('npm test -- --help')).toBe(false)
   expect(isTestCommand('npx jest --listTests')).toBe(false)
   expect(isTestCommand('pytest -q tests/')).toBe(true)
+  expect(isTestCommand('echo "Run: cd app && npm test"')).toBe(false)
+  expect(isTestCommand("pytest -k 'slow and db'")).toBe(true)
+  expect(isTestCommand('npm test "unclosed')).toBe(false)
 })
 
 test('streak achievements stay earned after a missed day', () => {

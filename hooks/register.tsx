@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage } from 'claude-code'
 
 import type { Usage } from '../types'
-import { legacyEntries, linesFromPatch, linesOf, nextCache, spendKey, spendTime, spentSince, WINDOW_MS } from './hud'
+import { editLines, legacyEntries, nextCache, spendKey, spendTime, spentSince, WINDOW_MS } from './hud'
 import { buildSvg, castleSvg, NIGHT } from './svg'
 import { ACHIEVEMENTS, addStats, dayKey, emptyStats, isTestCommand, profileOf, report, turnXp, XP } from './xp'
 import type { Stats } from './xp'
@@ -75,11 +75,11 @@ async function allSpend($: EngineInterface, t: number): Promise<Entry[]> {
       // The previous format, a list per session: copy what is still in range to new keys, then drop it.
       const id = key.slice(SPEND.length)
       const keep = legacyEntries(await $.store.get(key), t - KEEP_MS)
-      for (const [i, e] of keep.entries()) {
-        const k = spendKey(e.t, `old-${id}`, i)
+      for (const e of keep) {
+        const k = spendKey(e.t, `old-${id}`, e.i)
         await $.store.set(k, e.usd)
         seenSpend.set(k, e.usd)
-        out.set(k, e)
+        out.set(k, { t: e.t, usd: e.usd })
       }
       await $.store.delete(key)
       continue
@@ -99,7 +99,15 @@ async function allSpend($: EngineInterface, t: number): Promise<Entry[]> {
   return [...out.values()]
 }
 
-async function resum($: EngineInterface) {
+let summing: Promise<void> = Promise.resolve()
+
+/** Re-sums the 5-hour spend; sums run one at a time, so an older total never replaces a newer one. */
+function resum($: EngineInterface): Promise<void> {
+  summing = summing.catch(() => undefined).then(() => sumSpend($))
+  return summing
+}
+
+async function sumSpend($: EngineInterface) {
   const t = await $.clock.now()
   const spent = spentSince(await allSpend($, t), windowStart(await read($, usage), t))
   if (Math.abs(spent - ((await read($, windowUsd)) ?? -1)) > 0.004) await update($, windowUsd, () => spent)
@@ -249,11 +257,7 @@ export const register: Register = on => {
     const ran = await next(e)
     const isEdit = e.tool === 'Edit' || e.tool === 'Write' || (e.tool as string) === 'MultiEdit'
     if (isEdit && ran.deny === undefined && ran.isError !== true) {
-      // The result's patch is what really changed; the input is the fallback when no patch came back.
-      const patch = (ran.result as { structuredPatch?: unknown } | undefined)?.structuredPatch
-      // A new file's patch comes back empty: fall back to the input when the patch shows nothing.
-      const fromPatch = linesFromPatch(patch)
-      const d = fromPatch && fromPatch.added + fromPatch.removed > 0 ? fromPatch : linesOf(e.tool, e as unknown as Record<string, unknown>)
+      const d = editLines(e.tool, e as unknown as Record<string, unknown>, ran.result)
       turnLines += d.added + d.removed
       if (d.added + d.removed > 0) await update($, lines, l => ({ added: l.added + d.added, removed: l.removed + d.removed }))
     }
@@ -305,7 +309,9 @@ export const register: Register = on => {
       // XP for the turn: finishing it, the lines it changed, a warm cache, a tidy context.
       const t = await $.clock.now()
       const warm = u.cache_read_input_tokens > 0
-      const tidy = ((await read($, usage))?.percent ?? 0) < 60
+      // turn.complete arrives before the turn's own measurement: read the context as it stands now.
+      const live = await $.session.usage()
+      const tidy = (live.context.percent ?? 0) < 60
       const isNight = new Date(t).getHours() < 4
       const day = dayKey(t)
       mine = {

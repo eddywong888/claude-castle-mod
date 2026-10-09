@@ -6,13 +6,18 @@ export const CACHE_TTL_MS = 60 * 60e3
 /** The store key for one cost increase: `spend:<time>:<session id>:<sequence>`, unique even within a millisecond. */
 export const spendKey = (t: number, id: string, seq: number) => `spend:${Math.round(t)}:${id}:${seq}`
 
-/** The entries of a spend key in the previous format (a list per session) that are still worth keeping. */
-export function legacyEntries(value: unknown, keepFrom: number): { t: number; usd: number }[] {
+/**
+ * The entries of a spend key in the previous format (a list per session) still worth keeping, each with its
+ * index in the original list: a retried conversion gives an entry the same new key even after others expire.
+ */
+export function legacyEntries(value: unknown, keepFrom: number): { t: number; usd: number; i: number }[] {
   if (!Array.isArray(value)) return []
-  return value.filter(
-    (e): e is { t: number; usd: number } =>
-      typeof e === 'object' && e !== null && typeof e.t === 'number' && typeof e.usd === 'number' && e.t >= keepFrom && e.usd > 0,
-  )
+  const out: { t: number; usd: number; i: number }[] = []
+  value.forEach((e: unknown, i) => {
+    const x = e as { t?: unknown; usd?: unknown } | null
+    if (x && typeof x.t === 'number' && typeof x.usd === 'number' && x.t >= keepFrom && x.usd > 0) out.push({ t: x.t, usd: x.usd, i })
+  })
+  return out
 }
 
 /** The time in a spend key, or null for a key in an older format. */
@@ -108,6 +113,20 @@ function diffCount(oldText: unknown, newText: unknown): { added: number; removed
   let tail = 0
   while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++
   return { added: b.length - head - tail, removed: a.length - head - tail }
+}
+
+/**
+ * Lines an Edit or Write call changed, from its result where it can. A staged edit (held for review) changed
+ * nothing yet; a Write that updated a file with the same content has an empty patch and changed nothing; only
+ * a new file, or a result without a patch, falls back to counting the input.
+ */
+export function editLines(tool: string, input: Record<string, unknown>, result: unknown): { added: number; removed: number } {
+  const r = (result ?? {}) as { staged?: unknown; structuredPatch?: unknown; type?: unknown; originalFile?: unknown }
+  if (r.staged === true) return { added: 0, removed: 0 }
+  const patch = linesFromPatch(r.structuredPatch)
+  if (patch && patch.added + patch.removed > 0) return patch
+  if (tool === 'Write' && r.type === 'update' && typeof r.originalFile === 'string') return { added: 0, removed: 0 }
+  return linesOf(tool, input)
 }
 
 /** Lines an edit tool changed, from its input, when its result carried no patch. */

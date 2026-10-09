@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { cacheHit, duration, elapsed, gauge, linesFromPatch, linesOf, legacyEntries, nextCache, spendKey, spendTime, k, moonEmoji, moonLight, spentSince, timeLeftShort } from './hud'
+import { editLines, cacheHit, duration, elapsed, gauge, linesFromPatch, linesOf, legacyEntries, nextCache, spendKey, spendTime, k, moonEmoji, moonLight, spentSince, timeLeftShort } from './hud'
 import { buildSvg, castleSvg, fireLevel, moonPath, zone } from './svg'
 
 const now = Date.parse('2026-10-09T10:00:00Z')
@@ -125,7 +125,15 @@ test('spend keys carry their own time', () => {
   expect(spendTime(key)).toBe(now)
   expect(spendKey(now, 'abc-123', 1)).not.toBe(key)
   const legacy = [{ t: now - 7 * 3600e3, usd: 3 }, { t: now - 3600e3, usd: 1.5 }, { t: now, usd: 0 }, 'junk']
-  expect(legacyEntries(legacy, now - 6 * 3600e3)).toEqual([{ t: now - 3600e3, usd: 1.5 }])
+  expect(legacyEntries(legacy, now - 6 * 3600e3)).toEqual([{ t: now - 3600e3, usd: 1.5, i: 1 }])
   expect(legacyEntries(undefined, 0)).toEqual([])
   expect(spendTime('spend:lq3x-9f2k')).toBe(null)
+})
+
+test('edits count what really changed', () => {
+  const patch = [{ lines: [' a', '+b'] }]
+  expect(editLines('Edit', { old_string: 'a', new_string: 'a\nb' }, { structuredPatch: patch })).toEqual({ added: 1, removed: 0 })
+  expect(editLines('Edit', { old_string: 'a', new_string: 'b' }, { structuredPatch: patch, staged: true })).toEqual({ added: 0, removed: 0 })
+  expect(editLines('Write', { content: 'x\ny' }, { type: 'update', originalFile: 'x\ny', structuredPatch: [] })).toEqual({ added: 0, removed: 0 })
+  expect(editLines('Write', { content: 'x\ny' }, { type: 'create', originalFile: null, structuredPatch: [] })).toEqual({ added: 2, removed: 0 })
 })
