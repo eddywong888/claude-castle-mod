@@ -7,5 +7,9 @@
   },
   "types": "./types/index.d.ts",
   "license": "MIT",
-  "repository": "https://github.com/eddywong888/claude-castle-mod"
+  "repository": "https://github.com/eddywong888/claude-castle-mod",
+  "homepage": "https://github.com/eddywong888/claude-castle-mod",
+  "documentationUrl": "https://github.com/eddywong888/claude-castle-mod#readme",
+  "supportUrl": "https://github.com/eddywong888/claude-castle-mod/issues",
+  "privacyPolicyUrl": "https://github.com/eddywong888/claude-castle-mod/blob/main/PRIVACY.md"
 }
