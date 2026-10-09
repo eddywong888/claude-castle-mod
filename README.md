@@ -72,6 +72,21 @@ Type `/castle` to see your level, where your XP came from and every achievement.
 - **XP and the 5-hour total** are kept in the mod's own storage on your machine. Nothing is sent anywhere.
 - **Terminal and desktop.** The desktop app draws the pixel-art version. A terminal draws the same sections as text, with a block bar for the context.
 
+## What the hooks do
+
+The mod only reads what Claude Code reports. It never blocks, changes or rewrites anything.
+
+| Hook | What it does |
+|---|---|
+| `session.start` | Reads the session's usage, registers `/castle` and starts a 15-second refresh |
+| `session.end` | After `/clear`, resets this conversation's figures |
+| `session.measure` | Reads the context, rate limits and cost after each turn |
+| `tool.call` | After Edit or Write succeeds, counts the lines changed. After a Bash test command passes, adds XP. Always passes the call through unchanged |
+| `command.run` | Answers `/castle` with your level and achievements |
+| `agent.spawn` | Notes a new subagent for the bat count. The subagent starts unchanged |
+| `turn.complete` | Records the last turn's time, output tokens, cache use and XP. The answer is unchanged |
+| `ui.render` | Draws the HUD above the prompt |
+
 ## Development
 
 The mod is a Claude Code plugin made of function hooks:
