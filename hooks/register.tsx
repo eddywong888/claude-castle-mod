@@ -16,6 +16,8 @@ const lastTurn = atom({ plugin: 'castle-hud', key: 'lastTurn' } as const, null)
 const lines = atom({ plugin: 'castle-hud', key: 'lines' } as const, { added: 0, removed: 0 })
 const startedAt = atom({ plugin: 'castle-hud', key: 'startedAt' } as const, 0)
 const profile = atom({ plugin: 'castle-hud', key: 'profile' } as const, null)
+// This session's XP id, kept in the session's state so a reload keeps adding to the same record.
+const xpId = atom({ plugin: 'castle-hud', key: 'xpId' } as const, '')
 
 // Cross-session spend. Every cost increase is its own write-once key, `spend:<t>:<id>`, holding the dollars:
 // sessions never overwrite each other, and clean-up deletes only keys whose own time has passed.
@@ -47,9 +49,13 @@ const fresh = new Map<string, number>()
 // Subagents seen running or spawned, to notice when one finishes; and those already credited with XP.
 const seenRunning = new Set<string>()
 const credited = new Set<string>()
-// This session's XP record, saved under its own key; lines changed during the current turn.
-const XP_KEY = `xp:${myId}`
+// This session's XP record, saved under its own key (set at session start); lines changed during the current turn.
+let XP_KEY = `xp:${myId}`
 let mine: Stats = emptyStats()
+// Other sessions' XP records, re-read every few minutes rather than on every refresh.
+let others = new Map<string, Stats>()
+let othersAt = 0
+const OTHERS_EVERY_MS = 5 * 60e3
 let turnLines = 0
 let dirty = false
 // The level and achievements last shown, to toast what is new; null until the first profile is read.
@@ -68,7 +74,11 @@ function windowStart(u: Usage | null, now: number): number {
 async function allSpend($: EngineInterface, t: number): Promise<Entry[]> {
   // Keyed by destination: an entry copied on an interrupted earlier pass and still in its old list counts once.
   const out = new Map<string, Entry>()
-  for (const key of await $.store.keys()) {
+  const keys = await $.store.keys()
+  // Forget entries other sessions have deleted since the last pass.
+  const present = new Set(keys)
+  for (const key of seenSpend.keys()) if (!present.has(key)) seenSpend.delete(key)
+  for (const key of keys) {
     if (!key.startsWith(SPEND)) continue
     const at = spendTime(key)
     if (at === null) {
@@ -165,21 +175,28 @@ function saveMine($: EngineInterface): Promise<void> {
 let syncing: Promise<Stats> = Promise.resolve(emptyStats())
 
 /** Saves and re-derives the profile; syncs run one at a time, so an older profile never replaces a newer one. */
-function syncProfile($: EngineInterface): Promise<Stats> {
-  syncing = syncing.catch(() => emptyStats()).then(() => deriveProfile($))
+function syncProfile($: EngineInterface, everyone = false): Promise<Stats> {
+  syncing = syncing.catch(() => emptyStats()).then(() => deriveProfile($, everyone))
   return syncing
 }
 
 /** Saves this session's record if it changed, then re-derives the profile from every session's records. */
-async function deriveProfile($: EngineInterface): Promise<Stats> {
+async function deriveProfile($: EngineInterface, everyone = false): Promise<Stats> {
   await saveMine($).catch(() => undefined) // retried on the next refresh
-  let all = emptyStats()
-  for (const key of await $.store.keys()) {
-    if (!key.startsWith('xp:')) continue
-    const s = key === XP_KEY ? mine : ((await $.store.get(key)) as Stats | undefined)
-    if (s) all = addStats(all, s)
+  const now = await $.clock.now()
+  if (everyone || now - othersAt > OTHERS_EVERY_MS) {
+    const next = new Map<string, Stats>()
+    for (const key of await $.store.keys()) {
+      if (!key.startsWith('xp:') || key === XP_KEY) continue
+      const s = (await $.store.get(key)) as Stats | undefined
+      if (s) next.set(key, s)
+    }
+    others = next
+    othersAt = now
   }
-  const p = profileOf(all, dayKey(await $.clock.now()))
+  let all = mine
+  for (const s of others.values()) all = addStats(all, s)
+  const p = profileOf(all, dayKey(now))
   const was = await read($, profile)
   if (!was || was.xp !== p.xp || was.streak !== p.streak || was.unlocked.length !== p.unlocked.length) await update($, profile, () => p)
 
@@ -214,6 +231,12 @@ export const register: Register = on => {
       await syncProfile($)
     }
     await $.store.delete('ledger') // the shared list an earlier version kept
+    // Keep one XP record per session across reloads: reuse the session's id and carry on from its saved record.
+    const id = (await read($, xpId)) || myId
+    if (!(await read($, xpId))) await update($, xpId, () => id)
+    XP_KEY = `xp:${id}`
+    const saved = (await $.store.get(XP_KEY)) as Stats | undefined
+    if (saved) mine = saved
     await startOver($)
     await $.command.register({ name: 'castle', description: 'Show your castle-hud level, streak and achievements' })
     await refresh()
@@ -222,10 +245,13 @@ export const register: Register = on => {
     return result
   })
 
-  // /clear starts a new conversation without a new session.start: reset what belongs to the old one.
+  // /clear and /resume switch conversation without a new session.start: reset what belongs to the old one.
   on('session.end', async ($, e, next) => {
     const result = await next(e)
-    if (e.reason === 'clear') {
+    await saveMine($).catch(() => undefined) // keep XP earned since the last refresh
+    if (e.reason === 'clear' || e.reason === 'resume') {
+      // Until the new conversation's baseline is read, cost changes count as nothing rather than as old spend.
+      lastUsd = undefined
       turnLines = 0
       await update($, lines, () => ({ added: 0, removed: 0 }))
       await update($, lastTurn, () => null)
@@ -279,7 +305,7 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e))
 
   on('command.run', { command: 'castle' }, async $ => {
-    const all = await syncProfile($)
+    const all = await syncProfile($, true)
     const p = await read($, profile)
 
     return { text: p ? report(all, p) : 'No XP yet: finish a turn to start.' }
@@ -287,7 +313,8 @@ export const register: Register = on => {
 
   on('agent.spawn', async ($, e, next) => {
     const spawned = await next(e)
-    if (spawned.deny === undefined && spawned.agentId) {
+    // A workflow's agents never appear in the roster: leave them out rather than track them forever.
+    if (spawned.deny === undefined && spawned.agentId && !e.workflow) {
       fresh.set(spawned.agentId, await $.clock.now())
       seenRunning.add(spawned.agentId) // so a subagent that finishes before the next roster reading still counts
       await countBats($)
@@ -308,9 +335,12 @@ export const register: Register = on => {
 
       // XP for the turn: finishing it, the lines it changed, a warm cache, a tidy context.
       const t = await $.clock.now()
-      const warm = u.cache_read_input_tokens > 0
       // turn.complete arrives before the turn's own measurement: read the context as it stands now.
       const live = await $.session.usage()
+      // A turn's usage adds up all its requests: after an expired cache the first rewrites it and the rest read it.
+      // A write of half the context or more means the cache was rebuilt, so the turn started cold.
+      const rebuilt = (live.context.tokens ?? 0) > 0 && u.cache_creation_input_tokens >= 0.5 * (live.context.tokens ?? 0)
+      const warm = u.cache_read_input_tokens > 0 && !rebuilt
       const tidy = (live.context.percent ?? 0) < 60
       const isNight = new Date(t).getHours() < 4
       const day = dayKey(t)
@@ -326,10 +356,10 @@ export const register: Register = on => {
       }
       turnLines = 0
       dirty = true
-      await syncProfile($)
+      void syncProfile($) // the turn doesn't wait for the profile
       const at = await $.clock.now()
       const prev = await read($, cache)
-      const next2 = nextCache(prev?.at ? prev : null, u, at)
+      const next2 = nextCache(prev?.at ? prev : null, rebuilt ? { ...u, cache_read_input_tokens: 0 } : u, at)
       if (next2 !== prev) await update($, cache, () => next2)
     }
 
@@ -337,7 +367,7 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    // Drawn on the desktop app, VS Code and mobile only: a terminal keeps its own status line.
+    // Drawn in the desktop app only (Claude Code raises this band on terminal and desktop): a terminal keeps its own status line.
     if (e.props.hasSurvey || e.surface === 'terminal') return next(e)
 
     const u = await read($, usage)

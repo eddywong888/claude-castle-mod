@@ -7,6 +7,6 @@ export type Cache = { read: number; written: number; uncached: number; at: numbe
 
 declare module 'claude-code' {
   interface PluginState {
-    'castle-hud': { usage: Usage | null; cache: Cache | null; bats: number; now: number; windowUsd: number | null; lastTurn: LastTurn | null; lines: Lines; startedAt: number; profile: Profile | null }
+    'castle-hud': { usage: Usage | null; cache: Cache | null; bats: number; now: number; windowUsd: number | null; lastTurn: LastTurn | null; lines: Lines; startedAt: number; profile: Profile | null; xpId: string }
   }
 }
