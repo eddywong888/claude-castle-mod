@@ -198,7 +198,8 @@ async function deriveProfile($: EngineInterface, everyone = false): Promise<Stat
   for (const s of others.values()) all = addStats(all, s)
   const p = profileOf(all, dayKey(now))
   const was = await read($, profile)
-  if (!was || was.xp !== p.xp || was.streak !== p.streak || was.unlocked.length !== p.unlocked.length) await update($, profile, () => p)
+  const changed = !was || was.xp !== p.xp || was.streak !== p.streak || was.unlocked.length !== p.unlocked.length || was.castleTier !== p.castleTier
+  if (changed) await update($, profile, () => p)
 
   if (known) {
     if (p.level > known.level) $.ui.toast(`Level ${p.level} reached: ${p.title}`)
@@ -367,7 +368,8 @@ export const register: Register = on => {
       void syncProfile($) // the turn doesn't wait for the profile
       const at = await $.clock.now()
       const prev = await read($, cache)
-      const next2 = nextCache(prev?.at ? prev : null, rebuilt ? { ...u, cache_read_input_tokens: 0 } : u, at)
+      // The real counts are kept for the hit rate; `rebuilt` only steers what the lifetime learns.
+      const next2 = nextCache(prev?.at ? prev : null, u, at, rebuilt)
       if (next2 !== prev) await update($, cache, () => next2)
     }
 

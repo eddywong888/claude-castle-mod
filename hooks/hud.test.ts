@@ -147,3 +147,12 @@ test('castle grows with its tier', () => {
   expect(castleSvg(0, 4).source).toContain('#c8283f')
   expect(castleSvg(0, 9).alt).toContain('tier 5 of 5')
 })
+
+test('a cold start keeps its real cache counts but learns the short life', () => {
+  const u = { cache_read_input_tokens: 45000, cache_creation_input_tokens: 5000, input_tokens: 10, model: 'm' }
+  const first = nextCache(null, { ...u, cache_read_input_tokens: 0 }, now)
+  const cold = nextCache(first, u, now + 20 * 60e3, true)
+  expect(cold?.read).toBe(45000)
+  expect(cold?.ttlMs).toBe(5 * 60e3)
+  expect(nextCache(first, u, now + 20 * 60e3, false)?.ttlMs).toBe(60 * 60e3)
+})

@@ -158,17 +158,20 @@ export function nextCache(
   prev: CacheState | null,
   u: { cache_read_input_tokens: number; cache_creation_input_tokens: number; input_tokens: number; model?: string },
   at: number,
+  coldStart = false,
 ): CacheState | null {
   const read = u.cache_read_input_tokens
   const written = u.cache_creation_input_tokens
   if (read + written === 0) return prev
+  // A turn that started cold rebuilt the cache, whatever its later requests read: learn from it as unread.
+  const readWhenStarted = coldStart ? 0 : read
   const sameModel = !prev?.model || !u.model || prev.model === u.model
   // A different model has its own cache: start again from the default lifetime.
   let ttlMs = sameModel ? (prev?.ttlMs ?? CACHE_TTL_MS) : CACHE_TTL_MS
   if (prev?.at && sameModel) {
     const gap = at - prev.at
     if (gap > FIVE_MIN && gap < CACHE_TTL_MS) {
-      if (read > 0) ttlMs = CACHE_TTL_MS
+      if (readWhenStarted > 0) ttlMs = CACHE_TTL_MS
       else if (written > 0) ttlMs = FIVE_MIN
     }
   }
