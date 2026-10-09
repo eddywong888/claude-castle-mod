@@ -250,14 +250,6 @@ export const register: Register = on => {
   on('session.end', async ($, e, next) => {
     const result = await next(e)
     await saveMine($).catch(() => undefined) // keep XP earned since the last refresh
-    if (e.reason === 'clear') {
-      // A fresh start raises the castle a tier, up to five.
-      const before = (await read($, profile))?.castleTier ?? 1
-      mine = { ...mine, clears: (mine.clears ?? 0) + 1 }
-      dirty = true
-      if (before < 5) $.ui.toast(`Castle raised to tier ${before + 1} of 5`)
-      void syncProfile($)
-    }
     if (e.reason === 'clear' || e.reason === 'resume') {
       // Until the new conversation's baseline is read, cost changes count as nothing rather than as old spend.
       lastUsd = undefined
@@ -270,6 +262,21 @@ export const register: Register = on => {
 
     return result
   })
+
+  // A compaction (the person's /compact, or Claude Code's own at its limit) rebuilds the castle a tier, up to five.
+  // A `precompute` only prepares one ahead of time, and a skipped compaction changes nothing: neither counts.
+  on('session.compact', async ($, e, next) => {
+    const result = await next(e)
+    if (e.trigger !== 'precompute' && result.skip === undefined) {
+      const before = (await read($, profile))?.castleTier ?? 1
+      mine = { ...mine, compacts: (mine.compacts ?? 0) + 1 }
+      dirty = true
+      if (before < 5) $.ui.toast(`Castle rebuilt to tier ${before + 1} of 5`)
+      void syncProfile($)
+    }
+
+    return result
+  }).catch(($, e, next) => next(e)) // counting failed: the compaction still goes through
 
   on('session.measure', async ($, e, next) => {
     const u = toUsage(e)

@@ -53,7 +53,7 @@ As the context fills, the castle reacts: its windows turn from gold to red at 50
 
 ### Build up the castle
 
-Every `/clear` raises the castle one tier, up to five. Starting fresh keeps the context small, so the castle rewards it. It starts with two towers, gains its right tower, then the keep, then banners, and at tier 5 an outer watchtower and a gold crest on the main spire. The tier is kept across sessions.
+Every compaction raises the castle one tier, up to five: your own `/compact`, or the one Claude Code runs itself when the context is full. The fire burns as the context fills, and compacting rebuilds the castle bigger. It starts with two towers, gains its right tower, then the keep, then banners, and at tier 5 an outer watchtower and a gold crest on the main spire. The tier is kept across sessions.
 
 ![The castle at tiers 1 to 5](screenshots/tiers.png)
 
@@ -93,7 +93,8 @@ The mod only reads what Claude Code reports. It never blocks, changes or rewrite
 | Hook | What it does |
 |---|---|
 | `session.start` | Reads the session's usage, registers `/castle` and starts a 15-second refresh |
-| `session.end` | After `/clear`, resets this conversation's figures |
+| `session.end` | Saves your XP. After `/clear` or `/resume`, resets this conversation's figures |
+| `session.compact` | After a compaction finishes, raises the castle a tier. The compaction itself is unchanged |
 | `session.measure` | Reads the context, rate limits and cost after each turn |
 | `tool.call` | After Edit or Write succeeds, counts the lines changed. After a Bash test command passes, adds XP. Always passes the call through unchanged |
 | `command.run` | Answers `/castle` with your level and achievements |

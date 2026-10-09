@@ -331,7 +331,7 @@ function flame(size: 'small' | 'medium' | 'big', cx: number, baseY: number, dela
   return `<g class="fa" ${style}>${sprite(rows, FIRE, x, y, px)}</g><g class="fb" ${style}>${sprite(mirrored, FIRE, x, y, px)}</g>`
 }
 
-/** The castle's tiers: each /clear raises it one, up to five. */
+/** The castle's tiers: each compaction raises it one, up to five. */
 export const MAX_TIER = 5
 
 /**
