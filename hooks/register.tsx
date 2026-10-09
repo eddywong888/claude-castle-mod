@@ -2,8 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage } from 'claude-code'
 
 import type { Usage } from '../types'
-import { CACHE_TTL_MS, cacheHit, duration, elapsed, linesFromPatch, linesOf, endsAt, gauge, k, LIMIT_LABEL, moonEmoji, nextCache, spentSince, timeLeftShort, WINDOW_MS } from './hud'
-import { buildSvg, castleSvg, NIGHT, zone } from './svg'
+import { linesFromPatch, linesOf, nextCache, spentSince, WINDOW_MS } from './hud'
+import { buildSvg, castleSvg, NIGHT } from './svg'
 import { ACHIEVEMENTS, addStats, dayKey, emptyStats, isTestCommand, profileOf, report, turnXp, XP } from './xp'
 import type { Stats } from './xp'
 
@@ -273,7 +273,8 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey) return next(e)
+    // Drawn on the desktop app, VS Code and mobile only: a terminal keeps its own status line.
+    if (e.props.hasSurvey || e.surface === 'terminal') return next(e)
 
     const u = await read($, usage)
     const saved = await read($, cache)
@@ -287,82 +288,23 @@ export const register: Register = on => {
     const now = (await read($, tick)) || (await $.clock.now())
     const pct = u?.percent ?? 0
 
-    if (e.surface !== 'terminal') {
-      const { Box, Svg } = $.ui.resolve(e)
-      const svg = buildSvg({ usage: u, cache: c, bats, now, prevPercent: shownPercent, mode: 'dark', windowUsd: spent ?? undefined, lastTurn: turn, lines: changed, startedAt: began || undefined, profile: prof })
-      const castle = castleSvg(pct)
-      shownPercent = pct
+    const { Box, Svg } = $.ui.resolve(e)
+    const svg = buildSvg({ usage: u, cache: c, bats, now, prevPercent: shownPercent, mode: 'dark', windowUsd: spent ?? undefined, lastTurn: turn, lines: changed, startedAt: began || undefined, profile: prof })
+    const castle = castleSvg(pct)
+    shownPercent = pct
 
-      // Drawn as images, not interactive frames: an image swaps in place on a redraw, a frame reloads and flashes.
-      return (
-        // Mods get no corner radius; a round border in the background's own color is how the corners round.
-        <Box flexDirection="row" alignItems="flex-end" backgroundColor={NIGHT} borderStyle="round" borderColor={NIGHT} overflow="hidden" width="100%">
-          {/* The sections wrap in the space left of the castle, which keeps a column of its own: nothing sits under the flames. */}
-          <Box flexDirection="row" flexWrap="wrap" alignItems="flex-end" flexGrow={1} flexShrink={1}>
-            {svg.parts.map((part, i) => (
-              <Svg key={`s${i}`} source={part.source} alt={part.alt} width={part.width} height={part.height} />
-            ))}
-          </Box>
-          <Box flexShrink={0}>
-            <Svg key="castle" source={castle.source} alt={castle.alt} width={castle.width} height={castle.height} />
-          </Box>
-        </Box>
-      )
-    }
-
-    // The terminal draws text: each metric its own Box, wrapping to the terminal's width.
-    const { Box, Text } = $.ui.resolve(e)
-    const z = zone(pct)
-    const gaugeColor = z === 'blood' ? 'error' : z === 'gold' ? 'warning' : 'text'
-    const ttl = c?.ttlMs ?? CACHE_TTL_MS
-    const cacheText = !c ? '—' : c.at + ttl > now ? `${Math.min(ttl / 60000, Math.ceil((c.at + ttl - now) / 60000))}m` : 'cold'
-
+    // Drawn as images, not interactive frames: an image swaps in place on a redraw, a frame reloads and flashes.
     return (
-      <Box flexDirection="row" flexWrap="wrap" columnGap={4}>
-        <Box key="ctx">
-          <Text color={gaugeColor}>{gauge(pct, 12)}</Text>
-          <Text bold color={gaugeColor}>{` ${pct}%`}</Text>
-          <Text color="subtle">{u?.tokens === undefined ? ' context' : ` ${k(u.tokens)} of ${k(u.window)}`}</Text>
+      // Mods get no corner radius; a round border in the background's own color is how the corners round.
+      <Box flexDirection="row" alignItems="flex-end" backgroundColor={NIGHT} borderStyle="round" borderColor={NIGHT} overflow="hidden" width="100%">
+        {/* The sections wrap in the space left of the castle, which keeps a column of its own: nothing sits under the flames. */}
+        <Box flexDirection="row" flexWrap="wrap" alignItems="flex-end" flexGrow={1} flexShrink={1}>
+          {svg.parts.map((part, i) => (
+            <Svg key={`s${i}`} source={part.source} alt={part.alt} width={part.width} height={part.height} />
+          ))}
         </Box>
-        {(u?.limits ?? []).map(l => (
-          <Box key={l.kind}>
-            <Text>{`${moonEmoji(l.kind, l.resetsAt, now)} `}</Text>
-            <Text bold color={l.percentUsed >= 80 ? 'error' : 'text'}>{`${LIMIT_LABEL[l.kind] ?? l.kind} ${l.percentUsed}%`}</Text>
-            <Text color="subtle">{l.resetsAt ? ` ${timeLeftShort(l.resetsAt, now)} to ${endsAt(l.resetsAt, l.kind)}` : ''}</Text>
-          </Box>
-        ))}
-        <Box key="cache">
-          <Text bold>{`⏱ ${cacheText}`}</Text>
-          <Text color="subtle">{c ? ` cache, ${cacheHit(c)}% hit` : ' cache'}</Text>
-        </Box>
-        <Box key="cost">
-          <Text color="warning">{`● ${u?.usd === undefined ? '—' : `$${u.usd.toFixed(2)}`}`}</Text>
-          <Text color="subtle"> session </Text>
-          <Text color="warning">{spent === null ? '—' : `$${spent.toFixed(2)}`}</Text>
-          <Text color="subtle"> 5h</Text>
-        </Box>
-        {began ? (
-          <Box key="time">
-            <Text bold>{`🕯 ${elapsed(now - began)}`}</Text>
-            <Text color="subtle"> session</Text>
-          </Box>
-        ) : null}
-        <Box key="turn">
-          <Text bold>{turn ? duration(turn.ms) : '—'}</Text>
-          <Text color="subtle">{turn ? ` last turn, ${k(turn.out)} out` : ' last turn'}</Text>
-        </Box>
-        <Box key="lines">
-          <Text color="diffAdded">{`+${changed.added}`}</Text>
-          <Text color="diffRemoved">{` −${changed.removed}`}</Text>
-        </Box>
-        {prof ? (
-          <Box key="level">
-            <Text bold color="warning">{`LV ${prof.level}`}</Text>
-            <Text color="subtle">{` ${prof.title}, ${prof.into}/${prof.need} XP${prof.streak > 0 ? `, ${prof.streak}-day streak` : ''}`}</Text>
-          </Box>
-        ) : null}
-        <Box key="bats">
-          <Text color={bats === 0 ? 'subtle' : 'text'}>{bats === 0 ? '🦇 none' : `${'🦇'.repeat(Math.min(6, bats))} ${bats}`}</Text>
+        <Box flexShrink={0}>
+          <Svg key="castle" source={castle.source} alt={castle.alt} width={castle.width} height={castle.height} />
         </Box>
       </Box>
     )

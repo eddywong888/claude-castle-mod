@@ -16,7 +16,7 @@ In Claude Code, run these three commands:
 /reload-plugins
 ```
 
-The HUD appears after the reload, in the terminal and in the desktop app's Code tab. If it doesn't show up, restart Claude Code.
+The HUD appears after the reload, in the desktop app's Code tab and in VS Code. If it doesn't show up, restart Claude Code.
 
 A mod is code that runs inside Claude Code on your machine, with the same access Claude Code has. Read the source in `hooks/` before installing, as you would with any package.
 
@@ -70,7 +70,7 @@ Type `/castle` to see your level, where your XP came from and every achievement.
 - **The 5-hour total** counts only sessions running this mod, from when it was installed. Usage on claude.ai or in other tools isn't included.
 - **Lines changed** counts only Claude's Edit and Write tools. Files changed by shell commands such as `sed` or `git` aren't counted.
 - **XP and the 5-hour total** are kept in the mod's own storage on your machine. Nothing is sent anywhere.
-- **Terminal and desktop.** The desktop app draws the pixel-art version. A terminal draws the same sections as text, with a block bar for the context.
+- **Where it shows.** The HUD draws in the desktop app's Code tab and in VS Code. It draws nothing in a terminal, so a status line you've set up there stays as it is. Levels, XP and `/castle` still work everywhere.
 
 ## What the hooks do
 

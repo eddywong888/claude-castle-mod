@@ -35,7 +35,6 @@ function sprite(rows: string[], colors: Record<string, string>, x: number, y: nu
   return out
 }
 
-const HEART = ['.XX.XX.', 'XXXXXXX', 'XXXXXXX', '.XXXXX.', '..XXX..', '...X...']
 const COIN = ['..XXXX..', '.XHHGGX.', 'XHGGGGDX', 'XGGGGGDX', 'XGGGGGDX', 'XGGGGDDX', '.XDDDDX.', '..XXXX..']
 const RESET_LABEL: Record<string, string> = { five_hour: '5hr', seven_day: '7d' }
 
