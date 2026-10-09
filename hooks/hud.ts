@@ -3,8 +3,17 @@
 /** How long the prompt cache stays warm after a reply (this session's 1-hour TTL). */
 export const CACHE_TTL_MS = 60 * 60e3
 
-/** The store key for one cost increase: `spend:<time>:<session id>`. */
-export const spendKey = (t: number, id: string) => `spend:${Math.round(t)}:${id}`
+/** The store key for one cost increase: `spend:<time>:<session id>:<sequence>`, unique even within a millisecond. */
+export const spendKey = (t: number, id: string, seq: number) => `spend:${Math.round(t)}:${id}:${seq}`
+
+/** The entries of a spend key in the previous format (a list per session) that are still worth keeping. */
+export function legacyEntries(value: unknown, keepFrom: number): { t: number; usd: number }[] {
+  if (!Array.isArray(value)) return []
+  return value.filter(
+    (e): e is { t: number; usd: number } =>
+      typeof e === 'object' && e !== null && typeof e.t === 'number' && typeof e.usd === 'number' && e.t >= keepFrom && e.usd > 0,
+  )
+}
 
 /** The time in a spend key, or null for a key in an older format. */
 export function spendTime(key: string): number | null {
@@ -134,8 +143,9 @@ export function nextCache(
   const read = u.cache_read_input_tokens
   const written = u.cache_creation_input_tokens
   if (read + written === 0) return prev
-  let ttlMs = prev?.ttlMs ?? CACHE_TTL_MS
   const sameModel = !prev?.model || !u.model || prev.model === u.model
+  // A different model has its own cache: start again from the default lifetime.
+  let ttlMs = sameModel ? (prev?.ttlMs ?? CACHE_TTL_MS) : CACHE_TTL_MS
   if (prev?.at && sameModel) {
     const gap = at - prev.at
     if (gap > FIVE_MIN && gap < CACHE_TTL_MS) {

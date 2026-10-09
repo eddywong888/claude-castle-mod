@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage } from 'claude-code'
 
 import type { Usage } from '../types'
-import { linesFromPatch, linesOf, nextCache, spendKey, spendTime, spentSince, WINDOW_MS } from './hud'
+import { legacyEntries, linesFromPatch, linesOf, nextCache, spendKey, spendTime, spentSince, WINDOW_MS } from './hud'
 import { buildSvg, castleSvg, NIGHT } from './svg'
 import { ACHIEVEMENTS, addStats, dayKey, emptyStats, isTestCommand, profileOf, report, turnXp, XP } from './xp'
 import type { Stats } from './xp'
@@ -24,6 +24,8 @@ const KEEP_MS = 6 * 3600e3
 type Entry = { t: number; usd: number }
 // Entries already read: they never change once written.
 const seenSpend = new Map<string, number>()
+// Numbers this session's spend keys, so two increases in the same millisecond never share one.
+let spendSeq = 0
 
 const ACTIVE = new Set(['pending', 'running', 'waiting'])
 
@@ -67,7 +69,20 @@ async function allSpend($: EngineInterface, t: number): Promise<Entry[]> {
   for (const key of await $.store.keys()) {
     if (!key.startsWith(SPEND)) continue
     const at = spendTime(key)
-    if (at === null || at < t - KEEP_MS) {
+    if (at === null) {
+      // The previous format, a list per session: copy what is still in range to new keys, then drop it.
+      const id = key.slice(SPEND.length)
+      const keep = legacyEntries(await $.store.get(key), t - KEEP_MS)
+      for (const [i, e] of keep.entries()) {
+        const k = spendKey(e.t, `old-${id}`, i)
+        await $.store.set(k, e.usd)
+        seenSpend.set(k, e.usd)
+        out.push(e)
+      }
+      await $.store.delete(key)
+      continue
+    }
+    if (at < t - KEEP_MS) {
       await $.store.delete(key)
       seenSpend.delete(key)
       continue
@@ -115,7 +130,8 @@ let saving: Promise<void> = Promise.resolve()
 
 /** Saves this session's record if it changed. Saves run one at a time, so an older record never lands last. */
 function saveMine($: EngineInterface): Promise<void> {
-  saving = saving.then(async () => {
+  // A failed save must not stop later ones: start from a settled queue. The record stays marked until a save lands.
+  saving = saving.catch(() => undefined).then(async () => {
     if (!dirty) return
     const snapshot = mine
     await $.store.set(XP_KEY, snapshot)
@@ -127,7 +143,7 @@ function saveMine($: EngineInterface): Promise<void> {
 
 /** Saves this session's record if it changed, then re-derives the profile from every session's records. */
 async function syncProfile($: EngineInterface): Promise<Stats> {
-  await saveMine($)
+  await saveMine($).catch(() => undefined) // retried on the next refresh
   let all = emptyStats()
   for (const key of await $.store.keys()) {
     if (!key.startsWith('xp:')) continue
@@ -200,7 +216,7 @@ export const register: Register = on => {
       // A total below the last one means the session's cost started over (a /clear): all of it is new.
       const delta = lastUsd === undefined ? 0 : e.cost.usd < lastUsd ? e.cost.usd : e.cost.usd - lastUsd
       lastUsd = e.cost.usd
-      if (delta > 0) await $.store.set(spendKey(t, myId), delta)
+      if (delta > 0) await $.store.set(spendKey(t, myId, spendSeq++), delta)
       await resum($)
     }
 
@@ -311,6 +327,7 @@ export const register: Register = on => {
     const { Box, Svg } = $.ui.resolve(e)
     const svg = buildSvg({ usage: u, cache: c, bats, now, prevPercent: shownPercent, mode: 'dark', windowUsd: spent ?? undefined, lastTurn: turn, lines: changed, startedAt: began || undefined, profile: prof })
     const castle = castleSvg(pct)
+    const widest = Math.max(0, ...svg.parts.map(p => p.width))
     shownPercent = pct
 
     // Drawn as images, not interactive frames: an image swaps in place on a redraw, a frame reloads and flashes.
@@ -318,12 +335,13 @@ export const register: Register = on => {
       // Mods get no corner radius; a round border in the background's own color is how the corners round.
       <Box flexDirection="row" alignItems="flex-end" backgroundColor={NIGHT} borderStyle="round" borderColor={NIGHT} overflow="hidden" width="100%">
         {/* The sections wrap in the space left of the castle, which keeps a column of its own: nothing sits under the flames. */}
-        <Box flexDirection="row" flexWrap="wrap" alignItems="flex-end" flexGrow={1} flexShrink={1}>
+        <Box flexDirection="row" flexWrap="wrap" alignItems="flex-end" flexGrow={1} flexShrink={1} minWidth={`${widest}px`}>
           {svg.parts.map((part, i) => (
             <Svg key={`s${i}`} source={part.source} alt={part.alt} width={part.width} height={part.height} />
           ))}
         </Box>
-        <Box flexShrink={0}>
+        {/* On a pane too narrow for both, the castle shrinks and clips first: a section is never cut. */}
+        <Box flexShrink={1} minWidth={0} overflow="hidden" flexDirection="row" justifyContent="flex-end">
           <Svg key="castle" source={castle.source} alt={castle.alt} width={castle.width} height={castle.height} />
         </Box>
       </Box>
