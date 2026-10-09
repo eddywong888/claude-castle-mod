@@ -209,11 +209,16 @@ ${sprite(BAG, { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', T
   // Last turn: the dagger, how long the last reply took and what it wrote.
   {
     const t = h.lastTurn
+    // First line: the time with "last turn" beside it; second line: the tokens it wrote.
     const value = t ? duration(t.ms) : '—'
-    const caption = t ? `last turn, ${k(t.out)} out` : 'last turn'
+    const name = 'last turn'
+    const caption = t ? `${k(t.out)} output` : 'no reply yet'
+    const firstW = value.length * VALUE_W + 8 + name.length * CAPTION_W
     sections.push({
-      width: 30 + blockWidth(value, caption),
-      body: x => `<g transform="translate(${x} 0)">${sprite(DAGGER, { X: 'var(--stone)', W: 'var(--lit)', B: 'var(--gold)' }, 2, 14, 3.4)}${textBlock(30, value, caption)}</g>`,
+      width: 30 + Math.max(firstW, caption.length * CAPTION_W),
+      body: x => `<g transform="translate(${x} 0)">${sprite(DAGGER, { X: 'var(--stone)', W: 'var(--lit)', B: 'var(--gold)' }, 2, 14, 3.4)}
+<text x="30" y="27"><tspan class="v" fill="var(--ink)">${esc(value)}</tspan><tspan class="c" dx="8">${name}</tspan></text>
+<text x="30" y="50" class="c">${esc(caption)}</text></g>`,
     })
     alt.push(t ? `Last turn ${value}, ${k(t.out)} tokens written` : 'No turn yet')
   }
