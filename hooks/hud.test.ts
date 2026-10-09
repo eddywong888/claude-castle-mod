@@ -113,10 +113,10 @@ test('castle burns as the context fills', () => {
   expect(castleSvg(50).source).not.toContain('#e3b341')
   expect(castleSvg(50).source).toContain('#e0475b')
   expect(castleSvg(50).source).not.toContain('class="fa"')
-  expect(castleSvg(72).source.match(/class="fa"/g)?.length).toBe(1)
+  expect(castleSvg(72).source.match(/class="fa"/g)?.length).toBe(2) // the roof and the main window
   expect(castleSvg(72).source).toContain('#e0475b')
-  expect(castleSvg(83).source.match(/class="fa"/g)?.length).toBe(3)
-  expect(castleSvg(95).source.match(/class="fa"/g)?.length).toBe(5)
+  expect(castleSvg(83).source.match(/class="fa"/g)?.length).toBe(8) // roofs, windows and the wall
+  expect(castleSvg(95).source.match(/class="fa"/g)?.length).toBe(11)
   expect(castleSvg(95).source).toContain('blaze')
 })
 

@@ -393,10 +393,20 @@ export function castleSvg(percent = 0, tier = 4): { source: string; alt: string;
   const right = 146 + 7
   const side = (size: 'small' | 'medium' | 'big', delay: number) =>
     (has(LEFT) ? flame(size, left, 14, delay) : '') + (has(RIGHT) ? flame(size, right, 12, delay + 0.1) : '')
+  // Lower down, fire breaks out of the tower windows and along the wall between the towers.
+  const windowFire = (size: 'small' | 'medium' | 'big', delay: number) =>
+    flame(size, 95, 27, delay) + // main tower
+    (has(LEFT) ? flame('small', 41, 36, delay + 0.07) : '') +
+    (has(RIGHT) ? flame('small', 152, 34, delay + 0.13) : '')
+  const wallFire = (sizes: ('small' | 'medium')[]) =>
+    ([64, 124, 178] as const)
+      .slice(0, sizes.length)
+      .map((x, i) => flame(sizes[i] ?? 'small', x, 38, 0.05 * (i + 1)))
+      .join('')
   const flames =
-    fire === 'small' ? flame('small', main, 2, 0)
-    : fire === 'medium' ? flame('medium', main, 2, 0) + side('small', 0.1)
-    : fire === 'big' ? flame('big', main, 2, 0) + side('medium', 0.1) + (has(KEEP) ? flame('small', 202, 27, 0.15) + flame('small', 214, 27, 0.05) : '') + (has(OUTER) ? flame('small', 12, 10, 0.12) : '')
+    fire === 'small' ? flame('small', main, 2, 0) + flame('small', 95, 27, 0.1)
+    : fire === 'medium' ? flame('medium', main, 2, 0) + side('small', 0.1) + windowFire('small', 0.05) + wallFire(['small', 'small'])
+    : fire === 'big' ? flame('big', main, 2, 0) + side('medium', 0.1) + windowFire('medium', 0.05) + wallFire(['medium', 'medium', 'small']) + (has(KEEP) ? flame('small', 202, 27, 0.15) + flame('small', 214, 27, 0.05) : '') + (has(OUTER) ? flame('small', 12, 10, 0.12) : '')
     : ''
   const glow = fire === 'big'
     ? `<defs><radialGradient id="blaze" cx="50%" cy="100%" r="70%"><stop offset="0%" stop-color="#d8261c" stop-opacity=".45"/><stop offset="100%" stop-color="#d8261c" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="240" height="${60 + DY}" fill="url(#blaze)"/>`
