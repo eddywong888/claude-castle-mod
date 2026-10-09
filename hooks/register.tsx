@@ -448,7 +448,8 @@ export const register: Register = on => {
       // Mods get no corner radius; a round border in the background's own color is how the corners round.
       <Box flexDirection="row" alignItems="flex-end" backgroundColor={NIGHT} borderStyle="round" borderColor={NIGHT} overflow="hidden" width="100%">
         {/* The sections wrap in the space left of the castle, which keeps a column of its own: nothing sits under the flames. */}
-        <Box flexDirection="row" flexWrap="wrap" alignItems="flex-end" flexGrow={1} flexShrink={1}>
+        {/* The sections give way first (wrapping onto another row); the castle keeps its size unless even that isn't enough. */}
+        <Box flexDirection="row" flexWrap="wrap" alignItems="flex-end" flexGrow={1} flexShrink={100}>
           {svg.parts.map((part, i) => (
             <Svg key={`s${i}`} source={part.source} alt={part.alt} width={part.width} height={part.height} />
           ))}
