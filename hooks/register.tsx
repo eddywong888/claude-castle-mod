@@ -263,11 +263,20 @@ export const register: Register = on => {
       await update($, lines, () => ({ added: 0, removed: 0 }))
       await update($, lastTurn, () => null)
       await update($, cache, () => null)
-      $.clock.after(1000, () => void startOver($))
+      // The new conversation's baseline is read when it starts (classic.SessionStart below), before any turn.
     }
 
     return result
   })
+
+  // The moment a new or compacted conversation is in place: no turn can have run in it yet.
+  on('classic.SessionStart', async ($, e, next) => {
+    const result = await next(e)
+    if (e.source === 'clear' || e.source === 'resume') await startOver($) // its cost baseline, before any spend
+    if (e.source === 'compact') await refreshUsage($) // the compacted context, now installed
+
+    return result
+  }).catch(($, e, next) => next(e))
 
   // A compaction (the person's /compact, or Claude Code's own at its limit) rebuilds the castle a tier, up to five.
   // A `precompute` only prepares one ahead of time, and a skipped compaction changes nothing: neither counts.
@@ -279,8 +288,13 @@ export const register: Register = on => {
       dirty = true
       if (before < 5) $.ui.toast(`Castle rebuilt to tier ${before + 1} of 5`)
       void syncProfile($)
-      // The compacted context is small again: show it now, which also puts the fire out.
-      await refreshUsage($)
+      // The compacted size comes with the result: show it now, which also puts the fire out. The engine
+      // installs the new conversation after this hook returns, so reading the session here would be too early.
+      const u = await read($, usage)
+      if (u && result.tokensAfter !== undefined && u.window > 0) {
+        const tokens = result.tokensAfter
+        await update($, usage, () => ({ ...u, tokens, percent: Math.round((tokens / u.window) * 100) }))
+      }
     }
 
     return result
@@ -360,10 +374,14 @@ export const register: Register = on => {
       // XP for the turn: finishing it, the lines it changed, a warm cache, a tidy context.
       const t = await $.clock.now()
       // turn.complete arrives before the turn's own measurement: read the context as it stands now.
+      const before = await read($, usage) // the last measurement: the context the turn started from
       const live = await $.session.usage()
       // A turn's usage adds up all its requests: after an expired cache the first rewrites it and the rest read it.
-      // A write of half the context or more means the cache was rebuilt, so the turn started cold.
-      const rebuilt = (live.context.tokens ?? 0) > 0 && u.cache_creation_input_tokens >= 0.5 * (live.context.tokens ?? 0)
+      // A warm turn writes only what it adds; a cold one also rewrites the context it started from. So writes
+      // beyond the turn's growth by half the starting context or more mean the cache was rebuilt.
+      const startTokens = before?.tokens ?? 0
+      const growth = Math.max(0, (live.context.tokens ?? 0) - startTokens)
+      const rebuilt = startTokens > 0 && u.cache_creation_input_tokens >= growth + 0.5 * startTokens
       const warm = u.cache_read_input_tokens > 0 && !rebuilt
       const tidy = (live.context.percent ?? 0) < 60
       const isNight = new Date(t).getHours() < 4

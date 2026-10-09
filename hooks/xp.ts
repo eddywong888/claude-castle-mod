@@ -145,15 +145,16 @@ export function isTestCommand(command: string): boolean {
   // Quoted text is an argument, not a command: `echo "cd app && npm test"` runs no tests.
   const plain = command.replace(/"[^"]*"|'[^']*'/g, 'Q').replace(/\d*>&\d+/g, '') // `2>&1` only redirects output
   if (/["']/.test(plain)) return false // an unbalanced quote: can't tell what runs
-  if (/\|\||;|\||\n|`|\$\(|(^|[^&])&(?!&)/.test(plain)) return false
+  // Everything after an unquoted `#` is a comment: `echo ok # && npm test` runs no tests.
+  const code = plain.replace(/(^|\s)#.*$/gm, '$1')
+  if (/\|\||;|\||\n|`|\$\(|(^|[^&])&(?!&)/.test(code)) return false
   // Runs that list, collect or explain tests succeed without running any.
-  if (/(^|\s)(--collect-only|--co|--list-tests|--listTests|-list|--list|--help|-h|--version|--dry-run|--passWithNoTests)(\s|=|$)/.test(plain)) return false
-  return plain
+  if (/(^|\s)(--collect-only|--co|--list-tests|--listTests|-list|--list|--help|-h|--version|--dry-run|--passWithNoTests)(\s|=|$)/.test(code)) return false
+  return code
     .split('&&')
     .map(part => part.trim().replace(/^(\w+=\S*\s+)+/, '')) // drop leading VAR=value assignments
     .some(part => TEST_RUNNER.test(part))
 }
-
 
 /** The `/castle` report: level, streak, what earned the XP, and every achievement. */
 export function report(s: Stats, p: Profile): string {

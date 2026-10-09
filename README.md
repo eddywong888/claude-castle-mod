@@ -94,7 +94,8 @@ The mod only reads what Claude Code reports. It never blocks, changes or rewrite
 |---|---|
 | `session.start` | Reads the session's usage, registers `/castle` and starts a 15-second refresh |
 | `session.end` | Saves your XP. After `/clear` or `/resume`, resets this conversation's figures |
-| `session.compact` | After a compaction finishes, raises the castle a tier. The compaction itself is unchanged |
+| `session.compact` | After a compaction finishes, raises the castle a tier and shows the smaller context. The compaction itself is unchanged |
+| `classic.SessionStart` | When a cleared, resumed or compacted conversation starts, reads its starting cost and context |
 | `session.measure` | Reads the context, rate limits and cost after each turn |
 | `tool.call` | After Edit or Write succeeds, counts the lines changed. After a Bash test command passes, adds XP. Always passes the call through unchanged |
 | `command.run` | Answers `/castle` with your level and achievements |
