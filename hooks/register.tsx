@@ -282,7 +282,8 @@ export const register: Register = on => {
   // A `precompute` only prepares one ahead of time, and a skipped compaction changes nothing: neither counts.
   on('session.compact', async ($, e, next) => {
     const result = await next(e)
-    if (e.trigger !== 'precompute' && result.skip === undefined) {
+    // Only the main conversation's compaction: a subagent's (`e.agentId`) changes neither its context nor the castle.
+    if (!e.agentId && e.trigger !== 'precompute' && result.skip === undefined) {
       const before = (await read($, profile))?.castleTier ?? 1
       mine = { ...mine, compacts: (mine.compacts ?? 0) + 1 }
       dirty = true
