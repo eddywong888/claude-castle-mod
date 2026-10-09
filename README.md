@@ -8,13 +8,19 @@ It also has a small levelling game: you earn XP, keep a daily streak and unlock 
 
 ## Install
 
-In a Claude Code terminal session, run:
+In Claude Code, run these three commands:
 
 ```
-/plugin install castle-hud --marketplace eddywong888/claude-castle-mod
+/plugin marketplace add eddywong888/claude-castle-mod
+/plugin install castle-hud@claude-castle-mod
+/reload-plugins
 ```
 
-Answer `y` to add the marketplace, then pick a scope (user scope loads it in every session). It starts drawing right away, in the terminal and in the desktop app's Code tab.
+The HUD appears after the reload, in the terminal and in the desktop app's Code tab. If it doesn't show up, restart Claude Code.
+
+A mod is code that runs inside Claude Code on your machine, with the same access Claude Code has. Read the source in `hooks/` before installing, as you would with any package.
+
+To update later, run `/plugin marketplace update claude-castle-mod` and then `/reload-plugins`.
 
 ## What it shows
 
