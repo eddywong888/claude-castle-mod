@@ -2,6 +2,10 @@
   "name": "castle-hud",
   "version": "0.3.0",
   "description": "Castlevania-style HUD above the Claude Code prompt: context blood meter, rate-limit moons, cache stopwatch, costs, subagent bats, a burning castle, and levels with achievements",
-  "author": { "name": "Eddy Wong" },
-  "types": "./types/index.d.ts"
+  "author": {
+    "name": "Eddy Wong"
+  },
+  "types": "./types/index.d.ts",
+  "license": "MIT",
+  "repository": "https://github.com/eddywong888/claude-castle-mod"
 }

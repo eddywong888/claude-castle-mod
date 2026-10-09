@@ -20,16 +20,16 @@ Answer `y` to add the marketplace, then pick a scope (user scope loads it in eve
 
 | | Section | What it means |
 |---|---|---|
-| ▮▮▮▯ | **Blood meter** | How full the context window is: 20 cells, 5% each. The number turns gold from 60% and red from 85%. |
-| 🌖 | **Moons** | One per rate-limit window (5-hour, and 7-day once Claude Code reports it). Full moon when the window has just refreshed, waning to a new moon as it nears its reset. Shows the percent used, the time left and the reset time. |
-| ⏱ | **Stopwatch** | How long the prompt cache stays warm, and how much of the last reply's input it served. Reply while it's warm and the conversation is read from cache cheaply. |
-| 🪙 | **Coin** | What this session has cost. |
-| 💰 | **Money bag** | What every session running the mod spent in the current 5-hour window. Starts again from $0 when the window resets. |
-| 🕯 | **Candle** | How long the session has run. The candle burns down over eight hours. |
-| 🗡 | **Dagger** | How long the last reply took and how many tokens it wrote. |
-| 📜 | **Scroll** | Lines added and removed by Claude's Edit and Write tools this session. |
-| 🦇 | **Bats** | One flapping bat per subagent running now. |
-| 🛡 | **Crest** | Your level, title, XP toward the next level and your daily streak. |
+| <img src="screenshots/icons/meter.svg" height="16" alt=""> | **Blood meter** | How full the context window is: 20 cells, 5% each. The number turns gold from 60% and red from 85%. |
+| <img src="screenshots/icons/moon.svg" height="22" alt=""> | **Moons** | One per rate-limit window (5-hour, and 7-day once Claude Code reports it). Full moon when the window has just refreshed, waning to a new moon as it nears its reset. Shows the percent used, the time left and the reset time. |
+| <img src="screenshots/icons/stopwatch.svg" height="22" alt=""> | **Stopwatch** | How long the prompt cache stays warm, and how much of the last reply's input it served. Reply while it's warm and the conversation is read from cache cheaply. |
+| <img src="screenshots/icons/coin.svg" height="22" alt=""> | **Coin** | What this session has cost. |
+| <img src="screenshots/icons/bag.svg" height="22" alt=""> | **Money bag** | What every session running the mod spent in the current 5-hour window. Starts again from $0 when the window resets. |
+| <img src="screenshots/icons/candle.svg" height="22" alt=""> | **Candle** | How long the session has run. The candle burns down over eight hours. |
+| <img src="screenshots/icons/dagger.svg" height="22" alt=""> | **Dagger** | How long the last reply took and how many tokens it wrote. |
+| <img src="screenshots/icons/scroll.svg" height="22" alt=""> | **Scroll** | Lines added and removed by Claude's Edit and Write tools this session. |
+| <img src="screenshots/icons/bat.svg" height="22" alt=""> | **Bats** | One flapping bat per subagent running now. |
+| <img src="screenshots/icons/crest.svg" height="22" alt=""> | **Crest** | Your level, title, XP toward the next level and your daily streak. |
 
 ### The castle burns
 
@@ -39,7 +39,7 @@ As the context fills, the castle's windows turn red and it catches fire: a small
 
 ![A session near its limits](screenshots/danger-narrow.png)
 
-On a narrow window the sections wrap onto more rows. Each one keeps its full size.
+On a narrow window the sections wrap onto more rows, each at full size. The castle keeps its own column on the right, so the flames never cover a number.
 
 ## Levels, streaks and achievements
 
@@ -88,4 +88,8 @@ claude plugin validate .
 claude plugin test .
 ```
 
-The screenshots are renders of the mod's own drawing code with sample numbers.
+The screenshots and icons are renders of the mod's own drawing code with sample numbers.
+
+## License
+
+[MIT](LICENSE)

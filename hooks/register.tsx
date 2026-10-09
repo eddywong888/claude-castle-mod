@@ -296,14 +296,15 @@ export const register: Register = on => {
       // Drawn as images, not interactive frames: an image swaps in place on a redraw, a frame reloads and flashes.
       return (
         // Mods get no corner radius; a round border in the background's own color is how the corners round.
-        <Box position="relative" backgroundColor={NIGHT} borderStyle="round" borderColor={NIGHT} overflow="hidden" width="100%">
-          <Box position="absolute" right={0} bottom={0}>
-            <Svg key="castle" source={castle.source} alt={castle.alt} width={castle.width} height={castle.height} />
+        <Box flexDirection="row" alignItems="flex-end" backgroundColor={NIGHT} borderStyle="round" borderColor={NIGHT} overflow="hidden" width="100%">
+          {/* The sections wrap in the space left of the castle, which keeps a column of its own: nothing sits under the flames. */}
+          <Box flexDirection="row" flexWrap="wrap" alignItems="flex-end" flexGrow={1} flexShrink={1}>
+            {svg.parts.map((part, i) => (
+              <Svg key={`s${i}`} source={part.source} alt={part.alt} width={part.width} height={part.height} />
+            ))}
           </Box>
-          <Box flexDirection="row" flexWrap="wrap" alignItems="flex-end">
-          {svg.parts.map((part, i) => (
-            <Svg key={`s${i}`} source={part.source} alt={part.alt} width={part.width} height={part.height} />
-          ))}
+          <Box flexShrink={0}>
+            <Svg key="castle" source={castle.source} alt={castle.alt} width={castle.width} height={castle.height} />
           </Box>
         </Box>
       )

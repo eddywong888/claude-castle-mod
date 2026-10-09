@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="14 12 32 32"><style>svg{--ink:#ece3d0;--stone:#8e8597;--gold:#e3b341;--goldDark:#8a6510;--goldLight:#f7dc8a;--blood:#c8283f;--bloodLight:#f06a7c;--bloodDark:#7d1222;--lit:#f1e7c8;--track:rgba(236,227,208,.16);--shadow:rgba(10,8,12,.7)}
+text{font-family:Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif;font-variant-numeric:tabular-nums lining-nums}
+.v{font-size:23px;font-weight:600;letter-spacing:.01em}
+.c{font-size:19.7px;fill:var(--stone)}
+rect{shape-rendering:crispEdges}
+.drip{animation:drip .5s ease-out}
+@keyframes drip{from{opacity:.15}to{opacity:1}}
+@keyframes flapA{0%,49.9%{opacity:1}50%,100%{opacity:0}}
+@keyframes flapB{0%,49.9%{opacity:0}50%,100%{opacity:1}}
+.up{animation:flapA .36s steps(1) infinite}.down{opacity:0;animation:flapB .36s steps(1) infinite}
+@media (prefers-reduced-motion:reduce){.drip{animation:none}.up{animation:none}.down{animation:none;opacity:0}}
+</style><rect x="14" y="12" width="32" height="32" rx="5" fill="#1d1528"/><g transform="translate(22 0)"><rect x="4.800000000000001" y="39.599999999999994" width="12.8" height="3.2" fill="var(--goldDark)"/><rect x="6.4" y="20.39999999999999" width="9.600000000000001" height="19.200000000000003" fill="var(--lit)"/><rect x="12.8" y="20.39999999999999" width="3.2" height="19.200000000000003" fill="var(--stone)" opacity=".5"/><rect x="9.600000000000001" y="13.999999999999991" width="3.2" height="6.4" fill="var(--gold)"/><rect x="9.600000000000001" y="13.999999999999991" width="3.2" height="3.2" fill="var(--bloodLight)"/><text x="30" y="27" class="v" fill="var(--ink)">1h 0m</text><text x="30" y="50" class="c">session</text></g></svg>
