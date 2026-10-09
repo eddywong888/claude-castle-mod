@@ -1,5 +1,6 @@
 {
   "name": "castle-hud",
+  "displayName": "Castle HUD",
   "version": "0.3.0",
   "description": "Castlevania-style HUD above the Claude Code prompt: context blood meter, rate-limit moons, cache stopwatch, costs, subagent bats, a burning castle, and levels with achievements",
   "author": {
@@ -11,5 +12,15 @@
   "homepage": "https://github.com/eddywong888/claude-castle-mod",
   "documentationUrl": "https://github.com/eddywong888/claude-castle-mod#readme",
   "supportUrl": "https://github.com/eddywong888/claude-castle-mod/issues",
-  "privacyPolicyUrl": "https://github.com/eddywong888/claude-castle-mod/blob/main/PRIVACY.md"
+  "privacyPolicyUrl": "https://github.com/eddywong888/claude-castle-mod/blob/main/PRIVACY.md",
+  "keywords": [
+    "hud",
+    "usage",
+    "context",
+    "rate-limits",
+    "cost",
+    "castlevania",
+    "pixel-art",
+    "gamification"
+  ]
 }
