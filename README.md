@@ -53,7 +53,7 @@ As the context fills, the castle reacts: its windows turn from gold to red at 50
 
 ### Build up the castle
 
-Every `/clear` raises the castle one tier, up to five. Starting fresh keeps the context small, so the castle rewards it. It starts as a lone tower, gains its left and right towers, then the keep with banners, and at tier 5 an outer watchtower and a gold crest on the main spire. The tier is kept across sessions.
+Every `/clear` raises the castle one tier, up to five. Starting fresh keeps the context small, so the castle rewards it. It starts with two towers, gains its right tower, then the keep, then banners, and at tier 5 an outer watchtower and a gold crest on the main spire. The tier is kept across sessions.
 
 ![The castle at tiers 1 to 5](screenshots/tiers.png)
 

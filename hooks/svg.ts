@@ -336,21 +336,27 @@ function flame(size: 'small' | 'medium' | 'big', cx: number, baseY: number, dela
 export const MAX_TIER = 5
 
 /**
- * The castle on the right edge of the band: towers, lit windows, a few stars. It grows with its tier (a lone
- * tower at 1; the left and right towers at 2 and 3; the keep and banners at 4; an outer watchtower and a gold
- * crest at 5) and burns as the context fills.
+ * The castle on the right edge of the band: towers, lit windows, a few stars. It grows with its tier (two
+ * towers at 1; the right tower at 2; the keep at 3; banners at 4; an outer watchtower and a gold crest at 5)
+ * and burns as the context fills.
  */
 export function castleSvg(percent = 0, tier = 4): { source: string; alt: string; width: number; height: number } {
   const stone = '#3d2f52'
   const DY = 20 // room above the towers for the flames
   const t = Math.max(1, Math.min(MAX_TIER, Math.round(tier)))
   type Tower = { x: number; w: number; top: number; tip: number; from: number }
+  // The tier each part appears at.
+  const LEFT = 1
+  const RIGHT = 2
+  const KEEP = 3
+  const BANNERS = 4
+  const OUTER = 5
   const all: Tower[] = [
-    { x: 6, w: 12, top: 20, tip: 8, from: 5 }, // outer watchtower
-    { x: 34, w: 14, top: 24, tip: 12, from: 2 }, // left tower
+    { x: 6, w: 12, top: 20, tip: 8, from: OUTER }, // outer watchtower
+    { x: 34, w: 14, top: 24, tip: 12, from: LEFT }, // left tower
     { x: 86, w: 20, top: 12, tip: 0, from: 1 }, // main tower
-    { x: 146, w: 14, top: 22, tip: 10, from: 3 }, // right tower
-    { x: 196, w: 26, top: 30, tip: 30, from: 4 }, // keep, with battlements
+    { x: 146, w: 14, top: 22, tip: 10, from: RIGHT }, // right tower
+    { x: 196, w: 26, top: 30, tip: 30, from: KEEP }, // keep, with battlements
   ]
   const towers = all.filter(tw => t >= tw.from)
   const has = (from: number) => t >= from
@@ -369,28 +375,28 @@ export function castleSvg(percent = 0, tier = 4): { source: string; alt: string;
   // Banners from tier 4 on the side spires; a gold crest on the main spire at tier 5.
   const banner = (cx: number, tipY: number) =>
     `<rect x="${cx}" y="${tipY - 9}" width="1" height="9" fill="#8e8597"/><rect x="${cx + 1}" y="${tipY - 9}" width="6" height="4" fill="#c8283f"/><rect x="${cx + 1}" y="${tipY - 9}" width="6" height="1" fill="#d4a017"/>`
-  const banners = has(4) ? banner(41, 12) + banner(153, 10) + (has(5) ? banner(12, 8) : '') : ''
-  const crest = has(5) ? `<polygon points="96,-8 99,-4 96,0 93,-4" fill="#d4a017"/><rect x="95" y="-6" width="2" height="4" fill="#fff3c4"/>` : ''
+  const banners = has(BANNERS) ? banner(41, 12) + banner(153, 10) + (has(OUTER) ? banner(12, 8) : '') : ''
+  const crest = has(OUTER) ? `<polygon points="96,-8 99,-4 96,0 93,-4" fill="#d4a017"/><rect x="95" y="-6" width="2" height="4" fill="#fff3c4"/>` : ''
 
   const fire = fireLevel(percent)
   // The windows turn from candle-gold to red once half the context is used, before any fire.
   const lit = percent >= 50 ? '#e0475b' : '#e3b341'
   const windows =
     `<rect x="94" y="22" width="3" height="5" fill="${lit}"/>` +
-    (has(2) ? `<rect x="40" y="32" width="2" height="4" fill="${lit}" opacity=".55"/>` : '') +
-    (has(3) ? `<rect x="151" y="30" width="2" height="4" fill="${lit}" opacity="${fire === 'none' ? 0 : 0.7}"/>` : '') +
-    (has(5) ? `<rect x="11" y="28" width="2" height="4" fill="${lit}" opacity=".55"/>` : '')
+    (has(LEFT) ? `<rect x="40" y="32" width="2" height="4" fill="${lit}" opacity=".55"/>` : '') +
+    (has(RIGHT) ? `<rect x="151" y="30" width="2" height="4" fill="${lit}" opacity="${fire === 'none' ? 0 : 0.7}"/>` : '') +
+    (has(OUTER) ? `<rect x="11" y="28" width="2" height="4" fill="${lit}" opacity=".55"/>` : '')
 
   // Flames sit on the spire tips of the towers that stand (and the keep's battlements for the big fire).
   const main = 86 + 10
   const left = 34 + 7
   const right = 146 + 7
   const side = (size: 'small' | 'medium' | 'big', delay: number) =>
-    (has(2) ? flame(size, left, 14, delay) : '') + (has(3) ? flame(size, right, 12, delay + 0.1) : '')
+    (has(LEFT) ? flame(size, left, 14, delay) : '') + (has(RIGHT) ? flame(size, right, 12, delay + 0.1) : '')
   const flames =
     fire === 'small' ? flame('small', main, 2, 0)
     : fire === 'medium' ? flame('medium', main, 2, 0) + side('small', 0.1)
-    : fire === 'big' ? flame('big', main, 2, 0) + side('medium', 0.1) + (has(4) ? flame('small', 202, 27, 0.15) + flame('small', 214, 27, 0.05) : '') + (has(5) ? flame('small', 12, 10, 0.12) : '')
+    : fire === 'big' ? flame('big', main, 2, 0) + side('medium', 0.1) + (has(KEEP) ? flame('small', 202, 27, 0.15) + flame('small', 214, 27, 0.05) : '') + (has(OUTER) ? flame('small', 12, 10, 0.12) : '')
     : ''
   const glow = fire === 'big'
     ? `<defs><radialGradient id="blaze" cx="50%" cy="100%" r="70%"><stop offset="0%" stop-color="#d8261c" stop-opacity=".45"/><stop offset="100%" stop-color="#d8261c" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="240" height="${60 + DY}" fill="url(#blaze)"/>`
