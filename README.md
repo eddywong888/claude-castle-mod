@@ -1,0 +1,91 @@
+# Claude Castle Mod
+
+A Castlevania-style HUD for Claude Code. It sits above the prompt and shows what a session is using as it goes: the context window, the rate limits, the prompt cache, the cost and the subagents. A castle on the right catches fire as the context fills up.
+
+![The HUD above the prompt](screenshots/busy.png)
+
+It also has a small levelling game: you earn XP, keep a daily streak and unlock achievements as you work.
+
+## Install
+
+In a Claude Code terminal session, run:
+
+```
+/plugin install castle-hud --marketplace eddywong888/claude-castle-mod
+```
+
+Answer `y` to add the marketplace, then pick a scope (user scope loads it in every session). It starts drawing right away, in the terminal and in the desktop app's Code tab.
+
+## What it shows
+
+| | Section | What it means |
+|---|---|---|
+| ▮▮▮▯ | **Blood meter** | How full the context window is: 20 cells, 5% each. The number turns gold from 60% and red from 85%. |
+| 🌖 | **Moons** | One per rate-limit window (5-hour, and 7-day once Claude Code reports it). Full moon when the window has just refreshed, waning to a new moon as it nears its reset. Shows the percent used, the time left and the reset time. |
+| ⏱ | **Stopwatch** | How long the prompt cache stays warm, and how much of the last reply's input it served. Reply while it's warm and the conversation is read from cache cheaply. |
+| 🪙 | **Coin** | What this session has cost. |
+| 💰 | **Money bag** | What every session running the mod spent in the current 5-hour window. Starts again from $0 when the window resets. |
+| 🕯 | **Candle** | How long the session has run. The candle burns down over eight hours. |
+| 🗡 | **Dagger** | How long the last reply took and how many tokens it wrote. |
+| 📜 | **Scroll** | Lines added and removed by Claude's Edit and Write tools this session. |
+| 🦇 | **Bats** | One flapping bat per subagent running now. |
+| 🛡 | **Crest** | Your level, title, XP toward the next level and your daily streak. |
+
+### The castle burns
+
+As the context fills, the castle's windows turn red and it catches fire: a small fire at 70%, a bigger one at 80%, and the whole castle ablaze with a red glow at 90%. That's your cue to wrap up or start a fresh session before Claude Code compacts the conversation.
+
+![The castle at 50%, 72%, 84% and 95% context](screenshots/fire.png)
+
+![A session near its limits](screenshots/danger-narrow.png)
+
+On a narrow window the sections wrap onto more rows. Each one keeps its full size.
+
+## Levels, streaks and achievements
+
+| You do | XP |
+|---|---|
+| Finish a turn | +10 |
+| Change lines in that turn | +1 per 10 lines, up to +50 |
+| Reply while the cache is warm | +5 |
+| Finish a turn under 60% context | +5 |
+| Run tests that pass (npm, pnpm, yarn or bun test, pytest, jest, vitest, go test, cargo test and others) | +25 |
+| A subagent finishes | +15 |
+
+Each level needs a little more XP than the last. Titles change at level 1 (Wanderer), 5 (Vampire Hunter), 10 (Belmont Heir), 20 (Whip Master), 35 (Night Stalker) and 50 (Lord of the Castle).
+
+Your **streak** counts the days in a row with at least one finished turn. There are 14 **achievements**, from First Blood (your first turn) to Eternal Night (a 30-day streak). A pop-up appears for each level-up and each new achievement.
+
+Type `/castle` to see your level, where your XP came from and every achievement.
+
+## Good to know
+
+- **Cache life.** The cache countdown starts at one hour. If the mod sees the cache expire sooner, it switches to five minutes.
+- **The 5-hour total** counts only sessions running this mod, from when it was installed. Usage on claude.ai or in other tools isn't included.
+- **Lines changed** counts only Claude's Edit and Write tools. Files changed by shell commands such as `sed` or `git` aren't counted.
+- **XP and the 5-hour total** are kept in the mod's own storage on your machine. Nothing is sent anywhere.
+- **Terminal and desktop.** The desktop app draws the pixel-art version. A terminal draws the same sections as text, with a block bar for the context.
+
+## Development
+
+The mod is a Claude Code plugin made of function hooks:
+
+| File | What it holds |
+|---|---|
+| `hooks/register.tsx` | The hooks: usage readings, cost tracking, subagents, XP, and drawing the band |
+| `hooks/svg.ts` | The pixel-art drawing for the desktop app, and the castle |
+| `hooks/hud.ts` | Moons, the cache, line counting and formatting |
+| `hooks/xp.ts` | Levels, streaks and achievements |
+| `types/index.d.ts` | The mod's state, for type-checking |
+
+To try changes from a clone, start Claude Code with `claude --plugin-dir <this folder>`. To check them:
+
+```bash
+claude plugin validate .
+```
+
+```bash
+claude plugin test .
+```
+
+The screenshots are renders of the mod's own drawing code with sample numbers.

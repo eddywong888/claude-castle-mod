@@ -1,0 +1,14 @@
+{
+  "name": "claude-castle-mod",
+  "description": "A Castlevania-style usage HUD mod for Claude Code",
+  "owner": {
+    "name": "Eddy Wong"
+  },
+  "plugins": [
+    {
+      "name": "castle-hud",
+      "source": "./",
+      "description": "Castlevania-style HUD above the Claude Code prompt"
+    }
+  ]
+}
