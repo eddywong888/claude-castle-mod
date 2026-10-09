@@ -50,6 +50,11 @@ test('test commands are recognised', () => {
   expect(isTestCommand('echo pytest')).toBe(false)
   expect(isTestCommand('grep -r "npm test" .')).toBe(false)
   expect(isTestCommand('CI=1 npx vitest run')).toBe(true)
+  expect(isTestCommand('npm test 2>&1')).toBe(true)
+  expect(isTestCommand('npm test || true')).toBe(false)
+  expect(isTestCommand('false && npm test; true')).toBe(false)
+  expect(isTestCommand('npm test | tail -20')).toBe(false)
+  expect(isTestCommand('npm test &')).toBe(false)
 })
 
 test('streak achievements stay earned after a missed day', () => {

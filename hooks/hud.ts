@@ -3,6 +3,15 @@
 /** How long the prompt cache stays warm after a reply (this session's 1-hour TTL). */
 export const CACHE_TTL_MS = 60 * 60e3
 
+/** The store key for one cost increase: `spend:<time>:<session id>`. */
+export const spendKey = (t: number, id: string) => `spend:${Math.round(t)}:${id}`
+
+/** The time in a spend key, or null for a key in an older format. */
+export function spendTime(key: string): number | null {
+  const m = /^spend:(\d+):/.exec(key)
+  return m ? Number(m[1]) : null
+}
+
 /** What was spent at or after `start`, from the cross-session ledger. */
 export function spentSince(ledger: { t: number; usd: number }[], start: number): number {
   return ledger.reduce((sum, e) => (e.t >= start ? sum + e.usd : sum), 0)

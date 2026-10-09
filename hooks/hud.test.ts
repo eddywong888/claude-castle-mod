@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { cacheHit, duration, elapsed, gauge, linesFromPatch, linesOf, nextCache, k, moonEmoji, moonLight, spentSince, timeLeftShort } from './hud'
+import { cacheHit, duration, elapsed, gauge, linesFromPatch, linesOf, nextCache, spendKey, spendTime, k, moonEmoji, moonLight, spentSince, timeLeftShort } from './hud'
 import { buildSvg, castleSvg, fireLevel, moonPath, zone } from './svg'
 
 const now = Date.parse('2026-10-09T10:00:00Z')
@@ -112,4 +112,10 @@ test('castle burns as the context fills', () => {
   expect(castleSvg(83).source.match(/class="fa"/g)?.length).toBe(3)
   expect(castleSvg(95).source.match(/class="fa"/g)?.length).toBe(5)
   expect(castleSvg(95).source).toContain('blaze')
+})
+
+test('spend keys carry their own time', () => {
+  const key = spendKey(now, 'abc-123')
+  expect(spendTime(key)).toBe(now)
+  expect(spendTime('spend:lq3x-9f2k')).toBe(null)
 })

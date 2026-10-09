@@ -132,10 +132,16 @@ export function profileOf(s: Stats, today: string): Profile {
 // A test runner at the start of a command: `npm test`, `pnpm run test`, `pytest`, `go test`, `npx vitest`.
 const TEST_RUNNER = /^((npm|pnpm|yarn|bun)\s+(run\s+)?test\b|(npx\s+|bunx\s+|python3?\s+-m\s+)?(pytest|jest|vitest|mocha|rspec|phpunit)\b|(go|cargo|deno|mix|dotnet)\s+test\b|claude\s+plugin\s+test\b|make\s+test\b)/
 
-/** True when one of the commands in a chain (`cd app && npm test`) runs a test runner. */
+/**
+ * True when the command's success means a test run passed: a test runner alone, or in an `&&` chain
+ * (`cd app && npm test`), where every step has to succeed. Anything that can succeed after a failing test
+ * (`||`, `;`, a pipe, a background `&`, a newline, a subshell) doesn't count.
+ */
 export function isTestCommand(command: string): boolean {
-  return command
-    .split(/&&|\|\||;|\||\n/)
+  const plain = command.replace(/\d*>&\d+/g, '') // `2>&1` only redirects output
+  if (/\|\||;|\||\n|`|\$\(|(^|[^&])&(?!&)/.test(plain)) return false
+  return plain
+    .split('&&')
     .map(part => part.trim().replace(/^(\w+=\S*\s+)+/, '')) // drop leading VAR=value assignments
     .some(part => TEST_RUNNER.test(part))
 }

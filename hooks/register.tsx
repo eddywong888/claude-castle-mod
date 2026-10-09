@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage } from 'claude-code'
 
 import type { Usage } from '../types'
-import { linesFromPatch, linesOf, nextCache, spentSince, WINDOW_MS } from './hud'
+import { linesFromPatch, linesOf, nextCache, spendKey, spendTime, spentSince, WINDOW_MS } from './hud'
 import { buildSvg, castleSvg, NIGHT } from './svg'
 import { ACHIEVEMENTS, addStats, dayKey, emptyStats, isTestCommand, profileOf, report, turnXp, XP } from './xp'
 import type { Stats } from './xp'
@@ -17,11 +17,13 @@ const lines = atom({ plugin: 'castle-hud', key: 'lines' } as const, { added: 0, 
 const startedAt = atom({ plugin: 'castle-hud', key: 'startedAt' } as const, 0)
 const profile = atom({ plugin: 'castle-hud', key: 'profile' } as const, null)
 
-// Cross-session spend. Each session writes only its own key, `spend:<id>`, a list of { t, usd } per cost
-// increase, so two sessions never overwrite each other; the window total sums every session's key.
+// Cross-session spend. Every cost increase is its own write-once key, `spend:<t>:<id>`, holding the dollars:
+// sessions never overwrite each other, and clean-up deletes only keys whose own time has passed.
 const SPEND = 'spend:'
 const KEEP_MS = 6 * 3600e3
 type Entry = { t: number; usd: number }
+// Entries already read: they never change once written.
+const seenSpend = new Map<string, number>()
 
 const ACTIVE = new Set(['pending', 'running', 'waiting'])
 
@@ -37,13 +39,13 @@ function toUsage(u: Pick<SessionUsage, 'context' | 'rateLimits' | 'cost'>): Usag
 
 // This module's own state, fresh on every load.
 let lastUsd: number | undefined
-const myKey = `${SPEND}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+const myId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 // Subagents spawned but not yet in the roster, by id, with when they were spawned.
 const fresh = new Map<string, number>()
 // Subagents seen running, to notice when one finishes.
 const seenRunning = new Set<string>()
 // This session's XP record, saved under its own key; lines changed during the current turn.
-const XP_KEY = `xp:${myKey.slice(SPEND.length)}`
+const XP_KEY = `xp:${myId}`
 let mine: Stats = emptyStats()
 let turnLines = 0
 let dirty = false
@@ -59,14 +61,23 @@ function windowStart(u: Usage | null, now: number): number {
   return reset <= now ? reset : reset - span
 }
 
-/** Every session's spend entries; drops keys whose newest entry is past keeping. */
+/** Every session's spend entries still worth keeping; deletes the ones past keeping and older formats. */
 async function allSpend($: EngineInterface, t: number): Promise<Entry[]> {
   const out: Entry[] = []
   for (const key of await $.store.keys()) {
     if (!key.startsWith(SPEND)) continue
-    const list = ((await $.store.get(key)) as Entry[] | undefined) ?? []
-    if (key !== myKey && list.every(x => x.t < t - KEEP_MS)) await $.store.delete(key)
-    else out.push(...list)
+    const at = spendTime(key)
+    if (at === null || at < t - KEEP_MS) {
+      await $.store.delete(key)
+      seenSpend.delete(key)
+      continue
+    }
+    let usd = seenSpend.get(key)
+    if (usd === undefined) {
+      usd = Number(await $.store.get(key)) || 0
+      seenSpend.set(key, usd)
+    }
+    out.push({ t: at, usd })
   }
   return out
 }
@@ -100,12 +111,23 @@ async function countBats($: EngineInterface) {
   for (const id of ids) seenRunning.add(id)
 }
 
+let saving: Promise<void> = Promise.resolve()
+
+/** Saves this session's record if it changed. Saves run one at a time, so an older record never lands last. */
+function saveMine($: EngineInterface): Promise<void> {
+  saving = saving.then(async () => {
+    if (!dirty) return
+    const snapshot = mine
+    await $.store.set(XP_KEY, snapshot)
+    // XP earned while this save ran changed `mine`: leave it marked, for the next save.
+    if (mine === snapshot) dirty = false
+  })
+  return saving
+}
+
 /** Saves this session's record if it changed, then re-derives the profile from every session's records. */
 async function syncProfile($: EngineInterface): Promise<Stats> {
-  if (dirty) {
-    await $.store.set(XP_KEY, mine)
-    dirty = false
-  }
+  await saveMine($)
   let all = emptyStats()
   for (const key of await $.store.keys()) {
     if (!key.startsWith('xp:')) continue
@@ -159,6 +181,7 @@ export const register: Register = on => {
   on('session.end', async ($, e, next) => {
     const result = await next(e)
     if (e.reason === 'clear') {
+      turnLines = 0
       await update($, lines, () => ({ added: 0, removed: 0 }))
       await update($, lastTurn, () => null)
       await update($, cache, () => null)
@@ -177,10 +200,7 @@ export const register: Register = on => {
       // A total below the last one means the session's cost started over (a /clear): all of it is new.
       const delta = lastUsd === undefined ? 0 : e.cost.usd < lastUsd ? e.cost.usd : e.cost.usd - lastUsd
       lastUsd = e.cost.usd
-      if (delta > 0) {
-        const mine = ((await $.store.get(myKey)) as Entry[] | undefined) ?? []
-        await $.store.set(myKey, [...mine.filter(x => x.t >= t - KEEP_MS), { t, usd: delta }])
-      }
+      if (delta > 0) await $.store.set(spendKey(t, myId), delta)
       await resum($)
     }
 

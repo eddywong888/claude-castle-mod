@@ -20,7 +20,15 @@ The HUD appears after the reload, in the desktop app's Code tab and in VS Code. 
 
 A mod is code that runs inside Claude Code on your machine, with the same access Claude Code has. Read the source in `hooks/` before installing, as you would with any package.
 
-To update later, run `/plugin marketplace update claude-castle-mod` and then `/reload-plugins`.
+To update later, run:
+
+```
+/plugin marketplace update claude-castle-mod
+/plugin update castle-hud@claude-castle-mod
+/reload-plugins
+```
+
+If the HUD doesn't change after the reload, restart Claude Code.
 
 ## What it shows
 
