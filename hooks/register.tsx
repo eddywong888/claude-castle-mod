@@ -44,8 +44,9 @@ let lastUsd: number | undefined
 const myId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 // Subagents spawned but not yet in the roster, by id, with when they were spawned.
 const fresh = new Map<string, number>()
-// Subagents seen running, to notice when one finishes.
+// Subagents seen running or spawned, to notice when one finishes; and those already credited with XP.
 const seenRunning = new Set<string>()
+const credited = new Set<string>()
 // This session's XP record, saved under its own key; lines changed during the current turn.
 const XP_KEY = `xp:${myId}`
 let mine: Stats = emptyStats()
@@ -65,7 +66,8 @@ function windowStart(u: Usage | null, now: number): number {
 
 /** Every session's spend entries still worth keeping; deletes the ones past keeping and older formats. */
 async function allSpend($: EngineInterface, t: number): Promise<Entry[]> {
-  const out: Entry[] = []
+  // Keyed by destination: an entry copied on an interrupted earlier pass and still in its old list counts once.
+  const out = new Map<string, Entry>()
   for (const key of await $.store.keys()) {
     if (!key.startsWith(SPEND)) continue
     const at = spendTime(key)
@@ -77,7 +79,7 @@ async function allSpend($: EngineInterface, t: number): Promise<Entry[]> {
         const k = spendKey(e.t, `old-${id}`, i)
         await $.store.set(k, e.usd)
         seenSpend.set(k, e.usd)
-        out.push(e)
+        out.set(k, e)
       }
       await $.store.delete(key)
       continue
@@ -92,9 +94,9 @@ async function allSpend($: EngineInterface, t: number): Promise<Entry[]> {
       usd = Number(await $.store.get(key)) || 0
       seenSpend.set(key, usd)
     }
-    out.push({ t: at, usd })
+    out.set(key, { t: at, usd })
   }
-  return out
+  return [...out.values()]
 }
 
 async function resum($: EngineInterface) {
@@ -103,8 +105,16 @@ async function resum($: EngineInterface) {
   if (Math.abs(spent - ((await read($, windowUsd)) ?? -1)) > 0.004) await update($, windowUsd, () => spent)
 }
 
+let roster: Promise<void> = Promise.resolve()
+
+/** Reads the roster; readings run one at a time, so an older one never lands after a newer one. */
+function countBats($: EngineInterface): Promise<void> {
+  roster = roster.catch(() => undefined).then(() => readRoster($))
+  return roster
+}
+
 /** Running subagents from the roster, plus any spawned in the last 10 seconds that it does not list yet. */
-async function countBats($: EngineInterface) {
+async function readRoster($: EngineInterface) {
   const agents = await $.agent.list()
   const t = await $.clock.now()
   const ids = new Set(agents.filter(a => ACTIVE.has(a.status)).map(a => a.id))
@@ -114,11 +124,14 @@ async function countBats($: EngineInterface) {
     else ids.add(id)
   }
   if (ids.size !== (await read($, batCount))) await update($, batCount, () => ids.size)
-  // A subagent that was running and now reports completed is a bat slain.
+  // A subagent that was running (or was spawned) and now reports completed is a bat slain, once.
   for (const id of seenRunning) {
     if (ids.has(id)) continue
+    const status = agents.find(a => a.id === id)?.status
+    if (status === undefined) continue // not in the roster yet: keep watching
     seenRunning.delete(id)
-    if (agents.find(a => a.id === id)?.status === 'completed') {
+    if (status === 'completed' && !credited.has(id)) {
+      credited.add(id)
       mine = { ...mine, bats: mine.bats + 1, xp: mine.xp + XP.bat }
       dirty = true
     }
@@ -141,8 +154,16 @@ function saveMine($: EngineInterface): Promise<void> {
   return saving
 }
 
+let syncing: Promise<Stats> = Promise.resolve(emptyStats())
+
+/** Saves and re-derives the profile; syncs run one at a time, so an older profile never replaces a newer one. */
+function syncProfile($: EngineInterface): Promise<Stats> {
+  syncing = syncing.catch(() => emptyStats()).then(() => deriveProfile($))
+  return syncing
+}
+
 /** Saves this session's record if it changed, then re-derives the profile from every session's records. */
-async function syncProfile($: EngineInterface): Promise<Stats> {
+async function deriveProfile($: EngineInterface): Promise<Stats> {
   await saveMine($).catch(() => undefined) // retried on the next refresh
   let all = emptyStats()
   for (const key of await $.store.keys()) {
@@ -264,6 +285,7 @@ export const register: Register = on => {
     const spawned = await next(e)
     if (spawned.deny === undefined && spawned.agentId) {
       fresh.set(spawned.agentId, await $.clock.now())
+      seenRunning.add(spawned.agentId) // so a subagent that finishes before the next roster reading still counts
       await countBats($)
     }
 

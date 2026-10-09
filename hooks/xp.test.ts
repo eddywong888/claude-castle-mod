@@ -55,6 +55,11 @@ test('test commands are recognised', () => {
   expect(isTestCommand('false && npm test; true')).toBe(false)
   expect(isTestCommand('npm test | tail -20')).toBe(false)
   expect(isTestCommand('npm test &')).toBe(false)
+  expect(isTestCommand('pytest --collect-only')).toBe(false)
+  expect(isTestCommand('go test -list .')).toBe(false)
+  expect(isTestCommand('npm test -- --help')).toBe(false)
+  expect(isTestCommand('npx jest --listTests')).toBe(false)
+  expect(isTestCommand('pytest -q tests/')).toBe(true)
 })
 
 test('streak achievements stay earned after a missed day', () => {

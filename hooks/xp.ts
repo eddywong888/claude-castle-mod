@@ -140,6 +140,8 @@ const TEST_RUNNER = /^((npm|pnpm|yarn|bun)\s+(run\s+)?test\b|(npx\s+|bunx\s+|pyt
 export function isTestCommand(command: string): boolean {
   const plain = command.replace(/\d*>&\d+/g, '') // `2>&1` only redirects output
   if (/\|\||;|\||\n|`|\$\(|(^|[^&])&(?!&)/.test(plain)) return false
+  // Runs that list, collect or explain tests succeed without running any.
+  if (/(^|\s)(--collect-only|--co|--list-tests|--listTests|-list|--list|--help|-h|--version|--dry-run|--passWithNoTests)(\s|=|$)/.test(plain)) return false
   return plain
     .split('&&')
     .map(part => part.trim().replace(/^(\w+=\S*\s+)+/, '')) // drop leading VAR=value assignments
