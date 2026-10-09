@@ -148,9 +148,12 @@ export function isTestCommand(command: string): boolean {
   // Everything after an unquoted `#` is a comment: `echo ok # && npm test` runs no tests.
   const code = plain.replace(/(^|\s)#.*$/gm, '$1')
   if (/\|\||;|\||\n|`|\$\(|(^|[^&])&(?!&)/.test(code)) return false
-  // Runs that list, collect or explain tests succeed without running any. Checked with quotes removed, so a
-  // quoted flag (`pytest "--collect-only"`) still counts as one.
-  const words = command.replace(/["']/g, ' ')
+  // Runs that list, collect or explain tests succeed without running any. Checked on the command's real
+  // arguments: comments dropped, quotes removed, so `pytest "--collect-only"` is caught and
+  // `npm test # --help ...` isn't.
+  const quoted: string[] = []
+  const masked = command.replace(/"[^"]*"|'[^']*'/g, m => `\u0000${quoted.push(m.slice(1, -1)) - 1}\u0000`)
+  const words = masked.replace(/(^|\s)#.*$/gm, '$1').replace(/\u0000(\d+)\u0000/g, (_, i: string) => ` ${quoted[Number(i)]} `)
   if (/(^|\s)(--collect-only|--co|--list-tests|--listTests|-list|--list|--help|-h|--version|--dry-run|--passWithNoTests)(\s|=|$)/.test(words)) return false
   return code
     .split('&&')

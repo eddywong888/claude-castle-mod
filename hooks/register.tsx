@@ -392,7 +392,8 @@ export const register: Register = on => {
       // A warm turn writes only what it adds; a cold one also rewrites the context it started from. So writes
       // beyond the turn's growth by half the starting context or more mean the cache was rebuilt.
       const startTokens = before?.tokens ?? 0
-      const growth = Math.max(0, (live.context.tokens ?? 0) - startTokens)
+      // The turn's own output is in the final context but not yet in the cache: leave it out of the growth.
+      const growth = Math.max(0, (live.context.tokens ?? 0) - startTokens - u.output_tokens)
       const rebuilt = startTokens > 0 && u.cache_creation_input_tokens >= growth + 0.5 * startTokens
       const warm = u.cache_read_input_tokens > 0 && !rebuilt
       const tidy = (live.context.percent ?? 0) < 60
