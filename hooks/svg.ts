@@ -356,7 +356,8 @@ export function castleSvg(percent = 0): { source: string; alt: string; width: nu
     .join('')
 
   const fire = fireLevel(percent)
-  const lit = fire === 'none' ? '#e3b341' : '#e0475b'
+  // The windows turn from candle-gold to red once half the context is used, before any fire.
+  const lit = percent >= 50 ? '#e0475b' : '#e3b341'
   const windows = `<rect x="94" y="22" width="3" height="5" fill="${lit}"/><rect x="40" y="32" width="2" height="4" fill="${lit}" opacity=".55"/><rect x="151" y="30" width="2" height="4" fill="${lit}" opacity="${fire === 'none' ? 0 : 0.7}"/>`
 
   // Flames sit on the spire tips (and the keep's battlements for the big fire).

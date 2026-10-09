@@ -47,7 +47,7 @@ If the HUD doesn't change after the reload, restart Claude Code.
 
 ### The castle burns
 
-As the context fills, the castle's windows turn red and it catches fire: a small fire at 70%, a bigger one at 80%, and the whole castle ablaze with a red glow at 90%. That's your cue to wrap up or start a fresh session before Claude Code compacts the conversation.
+As the context fills, the castle reacts: its windows turn from gold to red at 50%, a small fire starts at 70%, a bigger one at 80%, and the whole castle is ablaze with a red glow at 90%. That's your cue to wrap up or start a fresh session before Claude Code compacts the conversation.
 
 ![The castle at 50%, 72%, 84% and 95% context](screenshots/fire.png)
 
