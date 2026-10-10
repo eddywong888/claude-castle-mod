@@ -255,7 +255,7 @@ ${sprite(BAG, { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', T
       width: flock + blockWidth(value, caption),
       body: x => `<g transform="translate(${x} 0)">${batsSvg}${textBlock(flock + batW - 25, value, caption, n === 0 ? 'var(--stone)' : 'var(--ink)')}</g>`,
     })
-    alt.push(n === 0 ? 'No subagents running' : `${n} subagents running`)
+    alt.push(n === 0 ? 'No subagents running' : `${n} ${caption} running`)
   }
 
   // Level: the crest, the level and title, and a gold bar of XP toward the next level.

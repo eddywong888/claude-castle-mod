@@ -37,6 +37,7 @@ function world(on: On, entries: Record<string, unknown> = {}) {
     return { value: undefined }
   })
   on('session.measure', (_$, e) => ({ changed: e.changed }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
   on('turn.complete', (_$, e) => ({ text: e.answer, usage: e.usage }))
   on('classic.SessionStart', () => ({}) as never)
   return { clock, store, s }
@@ -253,4 +254,16 @@ test('the saved 5-hour reset never moves back', async ($, on) => {
   await $.session.start(start as never)
   await clock.advance(15_000)
   expect(store.get('reset:five_hour')).toBe('2026-10-09T14:00:00Z')
+})
+
+test('the stopwatch shows cold within a refresh of the cache expiring', async ($, on) => {
+  const { clock } = world(on)
+  await $.session.start(start as never)
+  await clock.advance(20_000) // so the cache expires 20 seconds into a minute
+  await $.turn.start({ text: 'hi', turnId: 't1' } as never)
+  const usage = { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 500, model: 'm' }
+  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer', usage } as never)
+  // 15 seconds after it expires: the band says cold, not "1m".
+  await clock.advance(60 * 60e3 + 15_000)
+  expect(await band($ as never)).toContain('cache expired')
 })

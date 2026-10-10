@@ -521,8 +521,14 @@ export const register: Register = on => {
       // Write only what changed: every write redraws the band.
       await attempt(() => countBats($))
       await attempt(async () => {
-        const minute = Math.floor((await $.clock.now()) / 60000) * 60000
-        if (minute !== (await read($, tick))) await update($, tick, () => minute)
+        // The band redraws each minute, and also the moment the cache goes cold, so the stopwatch never shows
+        // a minute left on a cache that has expired.
+        const now = await $.clock.now()
+        const c = await read($, cache)
+        const expires = c?.at ? c.at + (c.ttlMs ?? CACHE_TTL_MS) : 0
+        const minute = Math.floor(now / 60000) * 60000
+        const mark = expires > minute && expires <= now ? expires : minute
+        if (mark !== (await read($, tick))) await update($, tick, () => mark)
       })
       // Re-sum the window each refresh, so it drops back to $0 after a reset even when idle.
       await attempt(() => resum($))
