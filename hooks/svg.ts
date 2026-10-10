@@ -113,7 +113,7 @@ export function buildSvg(h: Hud): { parts: Part[]; source: string; alt: string }
     const barX = (w - meterW) / 2
     sections.push({
       width: w,
-      body: x => `<g transform="translate(${x} 0)"><title>Context window: ${esc(caption)} (${value}).</title>
+      body: x => `<g transform="translate(${x} 0)">
 <g transform="translate(${barX.toFixed(1)} 0)">${cells}${notch(60, 'var(--gold)')}${notch(85, 'var(--blood)')}</g>
 <text x="${(w / 2).toFixed(1)}" y="52" text-anchor="middle"><tspan class="v" fill="${z === 'ink' ? 'var(--ink)' : `var(--${z})`}">${esc(value)}</tspan><tspan class="c" dx="8">${esc(caption)}</tspan></text></g>`,
     })
@@ -132,7 +132,7 @@ export function buildSvg(h: Hud): { parts: Part[]; source: string; alt: string }
     const firstW = value.length * VALUE_W + 8 + name.length * CAPTION_W
     sections.push({
       width: 40 + Math.max(firstW, caption.length * CAPTION_W),
-      body: x => `<g transform="translate(${x} 0)"><title>${esc(label)} limit: ${value} used.</title>
+      body: x => `<g transform="translate(${x} 0)">
 <circle cx="15" cy="31" r="14.5" fill="var(--shadow)" stroke="var(--stone)" stroke-width=".8"/>
 ${light > 0.01 ? litMoon(15, 31, 14.5, light) : ''}
 <text x="40" y="27"><tspan class="v" fill="${hot ? 'var(--blood)' : 'var(--ink)'}">${esc(value)}</tspan><tspan class="c" dx="8">${esc(name)}</tspan></text>
@@ -160,7 +160,7 @@ ${light > 0.01 ? litMoon(15, 31, 14.5, light) : ''}
     const low = warm && left < 5 * 60000
     sections.push({
       width: 36 + blockWidth(value, caption),
-      body: x => `<g transform="translate(${x} 0)"><title>Prompt cache: it lasts ${ttl / 60000} minutes after each reply. ${warm ? 'While warm, the next reply reads the conversation from cache at a fraction of the price.' : 'Cold: the next reply pays to write the conversation to cache again.'}</title>
+      body: x => `<g transform="translate(${x} 0)">
 ${sprite(STOPWATCH, { X: 'var(--ink)', W: warm ? 'var(--lit)' : 'var(--track)', H: 'var(--blood)', B: 'var(--gold)' }, 0, 18, 3.4)}${textBlock(36, value, caption, low ? 'var(--blood)' : warm ? 'var(--ink)' : 'var(--stone)')}</g>`,
     })
     alt.push(`Cache ${value}, ${caption}`)
@@ -171,14 +171,14 @@ ${sprite(STOPWATCH, { X: 'var(--ink)', W: warm ? 'var(--lit)' : 'var(--track)', 
     const value = u?.usd === undefined ? '—' : `$${u.usd.toFixed(2)}`
     sections.push({
       width: 36 + blockWidth(value, 'session'),
-      body: x => `<g transform="translate(${x} 0)"><title>What this session has cost so far.</title>
+      body: x => `<g transform="translate(${x} 0)">
 ${sprite(COIN, { X: 'var(--goldDark)', H: 'var(--goldLight)', G: 'var(--gold)', D: 'var(--goldDark)' }, 0, 18, 3.2)}${textBlock(36, value, 'session', 'var(--gold)')}</g>`,
     })
     alt.push(`Session cost ${value}`)
     const win = h.windowUsd === undefined ? '—' : `$${h.windowUsd.toFixed(2)}`
     sections.push({
       width: 36 + blockWidth(win, '5h window'),
-      body: x => `<g transform="translate(${x} 0)"><title>What every session running this mod spent since the current 5-hour window began.</title>
+      body: x => `<g transform="translate(${x} 0)">
 ${sprite(BAG, { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', T: 'var(--blood)' }, 0, 15, 3.2)}${textBlock(36, win, '5h window', 'var(--gold)')}</g>`,
     })
     alt.push(`5-hour window cost ${win}`)
@@ -253,7 +253,7 @@ ${sprite(BAG, { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', T
     }).join('')
     sections.push({
       width: flock + blockWidth(value, caption),
-      body: x => `<g transform="translate(${x} 0)"><title>Subagents running now.</title>${batsSvg}${textBlock(flock + batW - 25, value, caption, n === 0 ? 'var(--stone)' : 'var(--ink)')}</g>`,
+      body: x => `<g transform="translate(${x} 0)">${batsSvg}${textBlock(flock + batW - 25, value, caption, n === 0 ? 'var(--stone)' : 'var(--ink)')}</g>`,
     })
     alt.push(n === 0 ? 'No subagents running' : `${n} subagents running`)
   }

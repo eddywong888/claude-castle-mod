@@ -6,4 +6,7 @@ Castle HUD runs entirely inside Claude Code on your machine.
 - It saves your XP, streak and 5-hour spending in the plugin's own storage on your machine.
 - It sends nothing anywhere. It makes no network requests and collects no analytics.
 
-To remove everything it saved, uninstall the plugin.
+Uninstalling the plugin does not delete what it saved. To remove everything:
+
+- type `/castle reset`, then `/castle reset confirm`, with your other Claude Code sessions closed; or
+- delete the file under `~/.claude/plugins/store/` whose name starts with `castle-hud_`.

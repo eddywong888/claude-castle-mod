@@ -2,9 +2,9 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage } from 'claude-code'
 
 import type { Usage } from '../types'
-import { editLines, legacyEntries, nextCache, spendKey, spendTime, spentSince, WINDOW_MS } from './hud'
+import { coldStart, editLines, legacyEntries, nextCache, spendKey, spendTime, spentSince, WINDOW_MS } from './hud'
 import { buildSvg, castleSvg, NIGHT } from './svg'
-import { ACHIEVEMENTS, addStats, dayKey, emptyStats, isTestCommand, profileOf, report, turnXp, XP } from './xp'
+import { ACHIEVEMENTS, addStats, dayKey, emptyStats, isTestCommand, profileOf, report, subStats, turnXp, XP } from './xp'
 import type { Stats } from './xp'
 
 const usage = atom({ plugin: 'castle-hud', key: 'usage' } as const, null)
@@ -43,15 +43,33 @@ function toUsage(u: Pick<SessionUsage, 'context' | 'rateLimits' | 'cost'>): Usag
 
 // This module's own state, fresh on every load.
 let lastUsd: number | undefined
-const myId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+const myId = newId()
 // Subagents spawned but not yet in the roster, by id, with when they were spawned.
 const fresh = new Map<string, number>()
 // Subagents seen running or spawned, to notice when one finishes; and those already credited with XP.
 const seenRunning = new Set<string>()
 const credited = new Set<string>()
+// When a watched subagent was first missing from the roster: one gone for long is dropped rather than watched forever.
+const missingSince = new Map<string, number>()
+const MISSING_MS = 10 * 60e3
 // This session's XP record, saved under its own key (set at session start); lines changed during the current turn.
 let XP_KEY = `xp:${myId}`
 let mine: Stats = emptyStats()
+// The record as last saved, and when: an open session saves at least hourly, so a record unsaved for days has ended.
+let lastSaved: Stats | null = null
+let lastSavedAt = 0
+const TOUCH_EVERY_MS = 3600e3
+// Ended sessions' records are folded into one archive record, so the store doesn't grow a key per session forever.
+const ARCHIVE = 'xp:archive'
+type Archive = { total: Stats; folded: Record<string, number> }
+const FOLD_AFTER_MS = 2 * 86400e3
+const FORGET_FOLDED_MS = 30 * 86400e3
+// The level and achievements already toasted, shared by every session so each is toasted once, not once a window.
+const TOASTED = 'toasted'
+// The 5-hour window's last known reset, kept for the moments before Claude Code's first reading.
+const RESET_KEY = 'reset:five_hour'
+let knownReset: string | undefined
 // Other sessions' XP records, re-read every few minutes rather than on every refresh.
 let others = new Map<string, Stats>()
 let othersAt = 0
@@ -59,15 +77,16 @@ const OTHERS_EVERY_MS = 5 * 60e3
 let turnLines = 0
 // When the main conversation's current turn started (turn.start fires for the main loop only).
 let turnStartedAt = 0
+// The context when it started: a measurement in the middle of a turn moves the usage atom on.
+let turnStartTokens = 0
 let dirty = false
 // The level and achievements last shown, to toast what is new; null until the first profile is read.
 let known: { level: number; unlocked: Set<string> } | null = null
 
-function windowStart(u: Usage | null, now: number): number {
+function windowStart(resetsAt: string | undefined, now: number): number {
   const span = WINDOW_MS.five_hour ?? 0
-  const five = u?.limits.find(l => l.kind === 'five_hour')
-  if (!five?.resetsAt) return now - span
-  const reset = Date.parse(five.resetsAt)
+  if (!resetsAt) return now - span
+  const reset = Date.parse(resetsAt)
   // Past its reset with no new reading yet: the new window began at that reset.
   return reset <= now ? reset : reset - span
 }
@@ -119,9 +138,28 @@ function resum($: EngineInterface): Promise<void> {
   return summing
 }
 
+/** The 5-hour window's reset: from the latest reading, or the last one saved while there's none yet. */
+async function fiveHourReset($: EngineInterface): Promise<string | undefined> {
+  const now = (await read($, usage))?.limits.find(l => l.kind === 'five_hour')?.resetsAt
+  if (now) return now
+  if (knownReset === undefined) {
+    const saved = await $.store.get(RESET_KEY)
+    if (typeof saved === 'string') knownReset = saved
+  }
+  return knownReset
+}
+
+/** Saves the 5-hour window's reset when a reading brings a new one. */
+async function noteReset($: EngineInterface, u: Usage) {
+  const at = u.limits.find(l => l.kind === 'five_hour')?.resetsAt
+  if (!at || at === knownReset) return
+  await $.store.set(RESET_KEY, at)
+  knownReset = at
+}
+
 async function sumSpend($: EngineInterface) {
   const t = await $.clock.now()
-  const spent = spentSince(await allSpend($, t), windowStart(await read($, usage), t))
+  const spent = spentSince(await allSpend($, t), windowStart(await fiveHourReset($), t))
   if (Math.abs(spent - ((await read($, windowUsd)) ?? -1)) > 0.004) await update($, windowUsd, () => spent)
 }
 
@@ -148,15 +186,32 @@ async function readRoster($: EngineInterface) {
   for (const id of seenRunning) {
     if (ids.has(id)) continue
     const status = agents.find(a => a.id === id)?.status
-    if (status === undefined) continue // not in the roster yet: keep watching
-    seenRunning.delete(id)
-    if (status === 'completed' && !credited.has(id)) {
-      credited.add(id)
-      mine = { ...mine, bats: mine.bats + 1, xp: mine.xp + XP.bat }
-      dirty = true
+    if (status === undefined) {
+      // Not in the roster yet: keep watching, for a while. Its turn.complete may still credit it.
+      const since = missingSince.get(id) ?? t
+      missingSince.set(id, since)
+      if (t - since > MISSING_MS) {
+        seenRunning.delete(id)
+        missingSince.delete(id)
+      }
+      continue
     }
+    seenRunning.delete(id)
+    missingSince.delete(id)
+    if (status === 'completed') creditBat(id)
   }
-  for (const id of ids) seenRunning.add(id)
+  for (const id of ids) {
+    seenRunning.add(id)
+    missingSince.delete(id)
+  }
+}
+
+/** A subagent finished: a bat slain, credited once whichever sign of it comes first. */
+function creditBat(id: string) {
+  if (credited.has(id)) return
+  credited.add(id)
+  mine = { ...mine, bats: mine.bats + 1, xp: mine.xp + XP.bat }
+  dirty = true
 }
 
 let saving: Promise<void> = Promise.resolve()
@@ -165,13 +220,77 @@ let saving: Promise<void> = Promise.resolve()
 function saveMine($: EngineInterface): Promise<void> {
   // A failed save must not stop later ones: start from a settled queue. The record stays marked until a save lands.
   saving = saving.catch(() => undefined).then(async () => {
-    if (!dirty) return
+    const now = await $.clock.now()
+    // Unchanged records are saved again hourly, so others can tell an open session from an ended one.
+    if (!dirty && (!lastSaved || now - lastSavedAt < TOUCH_EVERY_MS)) return
+    // Back after a long sleep: another session may have folded this record into the archive meanwhile.
+    if (lastSaved && now - lastSavedAt > FOLD_AFTER_MS / 4) await leaveIfFolded($)
     const snapshot = mine
-    await $.store.set(XP_KEY, snapshot)
+    await $.store.set(XP_KEY, { ...snapshot, savedAt: now })
+    lastSaved = snapshot
+    lastSavedAt = now
     // XP earned while this save ran changed `mine`: leave it marked, for the next save.
     if (mine === snapshot) dirty = false
   })
   return saving
+}
+
+async function readArchive($: EngineInterface): Promise<Archive> {
+  const a = (await $.store.get(ARCHIVE)) as Partial<Archive> | undefined
+  return { total: a?.total ?? emptyStats(), folded: a?.folded ?? {} }
+}
+
+/** When this record is already in the archive, carries on under a new key with only what was earned since. */
+async function leaveIfFolded($: EngineInterface) {
+  const archive = await readArchive($)
+  if (!(XP_KEY in archive.folded)) return
+  const id = newId()
+  await update($, xpId, () => id)
+  XP_KEY = `xp:${id}`
+  mine = lastSaved ? subStats(mine, lastSaved) : mine
+  lastSaved = null
+  dirty = true
+}
+
+/**
+ * Other sessions' records, with the archive's total among them. Records not saved for days belong to ended
+ * sessions: they are added to the archive and listed as folded, and deleted on a later pass, once the archive
+ * that counts them is surely the one in the store (a fold lost to another session's write is simply redone).
+ */
+async function readOthers($: EngineInterface, now: number): Promise<Map<string, Stats>> {
+  const archive = await readArchive($)
+  const keys = await $.store.keys()
+  const present = new Set(keys)
+  const out = new Map<string, Stats>()
+  const fold: [string, Stats][] = []
+  for (const key of keys) {
+    if (!key.startsWith('xp:') || key === XP_KEY || key === ARCHIVE) continue
+    if (key in archive.folded) {
+      await $.store.delete(key) // counted in the archive
+      continue
+    }
+    const s = (await $.store.get(key)) as Stats | undefined
+    if (!s) continue
+    if (now - (s.savedAt ?? 0) > FOLD_AFTER_MS) fold.push([key, s])
+    else out.set(key, s)
+  }
+  const folded = { ...archive.folded }
+  let changed = false
+  for (const [key, at] of Object.entries(folded)) {
+    if (!present.has(key) && now - at > FORGET_FOLDED_MS) {
+      delete folded[key]
+      changed = true
+    }
+  }
+  let total = archive.total
+  for (const [key, s] of fold) {
+    total = addStats(total, s)
+    folded[key] = now
+    changed = true
+  }
+  if (changed) await $.store.set(ARCHIVE, { total, folded })
+  out.set(ARCHIVE, total)
+  return out
 }
 
 let syncing: Promise<Stats> = Promise.resolve(emptyStats())
@@ -187,13 +306,7 @@ async function deriveProfile($: EngineInterface, everyone = false): Promise<Stat
   await saveMine($).catch(() => undefined) // retried on the next refresh
   const now = await $.clock.now()
   if (everyone || now - othersAt > OTHERS_EVERY_MS) {
-    const next = new Map<string, Stats>()
-    for (const key of await $.store.keys()) {
-      if (!key.startsWith('xp:') || key === XP_KEY) continue
-      const s = (await $.store.get(key)) as Stats | undefined
-      if (s) next.set(key, s)
-    }
-    others = next
+    others = await readOthers($, now)
     othersAt = now
   }
   let all = mine
@@ -203,26 +316,64 @@ async function deriveProfile($: EngineInterface, everyone = false): Promise<Stat
   const changed = !was || was.xp !== p.xp || was.streak !== p.streak || was.unlocked.length !== p.unlocked.length || was.castleTier !== p.castleTier
   if (changed) await update($, profile, () => p)
 
-  if (known) {
-    if (p.level > known.level) $.ui.toast(`Level ${p.level} reached: ${p.title}`)
-    for (const a of ACHIEVEMENTS) if (p.unlocked.includes(a.id) && !known.unlocked.has(a.id)) $.ui.toast(`Achievement unlocked: ${a.name}`)
+  const seen = known
+  if (seen && (p.level > seen.level || p.unlocked.some(a => !seen.unlocked.has(a)))) {
+    // Every open session sees the same rise: toast only what no session has toasted yet.
+    const shown = (await $.store.get(TOASTED)) as { level: number; unlocked: string[] } | undefined
+    const base = shown ?? { level: seen.level, unlocked: [...seen.unlocked] }
+    const had = new Set(base.unlocked)
+    if (p.level > base.level) $.ui.toast(`Level ${p.level} reached: ${p.title}`)
+    for (const a of ACHIEVEMENTS) if (p.unlocked.includes(a.id) && !had.has(a.id)) $.ui.toast(`Achievement unlocked: ${a.name}`)
+    await $.store.set(TOASTED, { level: Math.max(base.level, p.level), unlocked: [...new Set([...base.unlocked, ...p.unlocked])] })
   }
   known = { level: p.level, unlocked: new Set(p.unlocked) }
   return all
 }
 
-/** Re-reads the context and limits now, rather than waiting for the next turn's measurement. */
-async function refreshUsage($: EngineInterface) {
-  const now = await $.session.usage()
-  await update($, usage, () => toUsage(now))
+/** Deletes everything the mod saved: every session's XP, the archive and the 5-hour spending. */
+async function resetAll($: EngineInterface) {
+  await saving.catch(() => undefined)
+  for (const key of await $.store.keys()) await $.store.delete(key)
+  mine = emptyStats()
+  lastSaved = null
+  lastSavedAt = 0
+  dirty = false
+  others = new Map()
+  othersAt = 0
+  known = null
+  seenSpend.clear()
+  knownReset = undefined
+  await update($, profile, () => null)
+  await update($, windowUsd, () => null)
 }
 
-/** Starts this conversation's own figures over: on load, and after /clear. */
+/** Starts this conversation's own figures over, for a cleared, resumed or forked conversation. */
+async function forgetConversation($: EngineInterface) {
+  // Until the new conversation's baseline is read, cost changes count as nothing rather than as old spend.
+  lastUsd = undefined
+  turnLines = 0
+  turnStartTokens = 0
+  await update($, lines, () => ({ added: 0, removed: 0 }))
+  await update($, lastTurn, () => null)
+  await update($, cache, () => null)
+}
+
+/** Re-reads the context and limits now, rather than waiting for the next turn's measurement. */
+async function refreshUsage($: EngineInterface) {
+  const fresh = toUsage(await $.session.usage())
+  // Just after a compaction the context isn't measured yet: keep the compacted size the result gave.
+  await update($, usage, prev => (fresh.tokens === undefined && prev ? { ...fresh, tokens: prev.tokens, percent: prev.percent } : fresh))
+  await noteReset($, fresh)
+}
+
+/** Reads this conversation's starting figures: on load, and after /clear, /resume or a fork. */
 async function startOver($: EngineInterface) {
   const now = await $.session.usage()
-  await update($, usage, () => toUsage(now))
+  const u = toUsage(now)
+  await update($, usage, () => u)
   lastUsd = now.cost?.usd
   await update($, startedAt, () => now.startedAt)
+  await noteReset($, u)
 }
 
 export const register: Register = on => {
@@ -230,43 +381,55 @@ export const register: Register = on => {
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
+    // Each step on its own: one that fails (a store that can't be read, say) leaves the rest running.
+    const attempt = async (step: () => Promise<unknown>) => {
+      try {
+        await step()
+      } catch {
+        // tried again on the next refresh
+      }
+    }
     const refresh = async () => {
       // Write only what changed: every write redraws the band.
-      await countBats($)
-      const minute = Math.floor((await $.clock.now()) / 60000) * 60000
-      if (minute !== (await read($, tick))) await update($, tick, () => minute)
+      await attempt(() => countBats($))
+      await attempt(async () => {
+        const minute = Math.floor((await $.clock.now()) / 60000) * 60000
+        if (minute !== (await read($, tick))) await update($, tick, () => minute)
+      })
       // Re-sum the window each refresh, so it drops back to $0 after a reset even when idle.
-      await resum($)
-      await syncProfile($)
+      await attempt(() => resum($))
+      await attempt(() => syncProfile($))
     }
-    await $.store.delete('ledger') // the shared list an earlier version kept
-    // Keep one XP record per session across reloads: reuse the session's id and carry on from its saved record.
-    const id = (await read($, xpId)) || myId
-    if (!(await read($, xpId))) await update($, xpId, () => id)
-    XP_KEY = `xp:${id}`
-    const saved = (await $.store.get(XP_KEY)) as Stats | undefined
-    if (saved) mine = saved
-    await startOver($)
-    await $.command.register({ name: 'castle', description: 'Show your castle-hud level, streak and achievements' })
-    await refresh()
+    // The timer first: if anything below fails, the band still keeps time.
     $.clock.every(15_000, () => void refresh())
+    await attempt(() => $.command.register({ name: 'castle', description: 'Show your castle-hud level, streak and achievements', argumentHint: '[reset]' }))
+    await attempt(() => $.store.delete('ledger')) // the shared list an earlier version kept
+    // Keep one XP record per session across reloads: reuse the session's id and carry on from its saved record.
+    await attempt(async () => {
+      const id = (await read($, xpId)) || myId
+      if (!(await read($, xpId))) await update($, xpId, () => id)
+      XP_KEY = `xp:${id}`
+      const saved = (await $.store.get(XP_KEY)) as Stats | undefined
+      if (saved) {
+        const { savedAt, ...stats } = saved
+        mine = stats
+        lastSaved = stats
+        lastSavedAt = savedAt ?? 0
+      }
+    })
+    await attempt(() => startOver($))
+    await refresh()
 
     return result
   })
 
   // /clear and /resume switch conversation without a new session.start: reset what belongs to the old one.
   on('session.end', async ($, e, next) => {
+    // Save first: the hooks share a short time limit at exit, and XP earned since the last refresh mustn't be lost.
+    await saveMine($).catch(() => undefined)
     const result = await next(e)
-    await saveMine($).catch(() => undefined) // keep XP earned since the last refresh
-    if (e.reason === 'clear' || e.reason === 'resume') {
-      // Until the new conversation's baseline is read, cost changes count as nothing rather than as old spend.
-      lastUsd = undefined
-      turnLines = 0
-      await update($, lines, () => ({ added: 0, removed: 0 }))
-      await update($, lastTurn, () => null)
-      await update($, cache, () => null)
-      // The new conversation's baseline is read when it starts (classic.SessionStart below), before any turn.
-    }
+    // The new conversation's baseline is read when it starts (classic.SessionStart below), before any turn.
+    if (e.reason === 'clear' || e.reason === 'resume') await forgetConversation($)
 
     return result
   })
@@ -274,7 +437,9 @@ export const register: Register = on => {
   // The moment a new or compacted conversation is in place: no turn can have run in it yet.
   on('classic.SessionStart', async ($, e, next) => {
     const result = await next(e)
-    if (e.source === 'clear' || e.source === 'resume') await startOver($) // its cost baseline, before any spend
+    // A fork may come without a session.end: start its figures over here as well.
+    if (e.source === 'fork') await forgetConversation($)
+    if (e.source === 'clear' || e.source === 'resume' || e.source === 'fork') await startOver($) // its cost baseline, before any spend
     if (e.source === 'compact') await refreshUsage($) // the compacted context, now installed
 
     return result
@@ -286,11 +451,15 @@ export const register: Register = on => {
     const result = await next(e)
     // Only the main conversation's compaction: a subagent's (`e.agentId`) changes neither its context nor the castle.
     if (!e.agentId && e.trigger !== 'precompute' && result.skip === undefined) {
-      const before = (await read($, profile))?.castleTier ?? 1
       mine = { ...mine, compacts: (mine.compacts ?? 0) + 1 }
       dirty = true
-      if (before < 5) $.ui.toast(`Castle rebuilt to tier ${before + 1} of 5`)
-      void syncProfile($)
+      // The tier from every session's records, read fresh, not from a profile that may be minutes old.
+      void syncProfile($, true)
+        .then(all => {
+          const n = all.compacts ?? 0
+          if (n >= 1 && n <= 4) $.ui.toast(`Castle rebuilt to tier ${n + 1} of 5`)
+        })
+        .catch(() => undefined)
       // The cached prefix changed: the next turn's rewrite isn't evidence of an expired cache.
       const c = await read($, cache)
       if (c) await update($, cache, () => ({ ...c, rebased: true }))
@@ -308,6 +477,7 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     turnStartedAt = await $.clock.now()
+    turnStartTokens = (await read($, usage))?.tokens ?? 0
 
     return next(e)
   })
@@ -315,6 +485,7 @@ export const register: Register = on => {
   on('session.measure', async ($, e, next) => {
     const u = toUsage(e)
     await update($, usage, () => u)
+    await noteReset($, u).catch(() => undefined)
 
     if (e.cost && e.changed.includes('cost')) {
       const t = await $.clock.now()
@@ -355,7 +526,20 @@ export const register: Register = on => {
     return ran
   }).catch(($, e, next) => next(e))
 
-  on('command.run', { command: 'castle' }, async $ => {
+  on('command.run', { command: 'castle' }, async ($, e) => {
+    const arg = e.args.trim().toLowerCase()
+    if (arg === 'reset')
+      return {
+        text: [
+          'This deletes everything castle-hud saved: your XP, level, streak, achievements, castle tier and the 5-hour spending.',
+          'Close your other Claude Code sessions first, or they save their own XP again.',
+          'To go ahead, type: /castle reset confirm',
+        ].join('\n'),
+      }
+    if (arg === 'reset confirm') {
+      await resetAll($)
+      return { text: 'Everything castle-hud saved is deleted. You start again at level 1.' }
+    }
     const all = await syncProfile($, true)
     const p = await read($, profile)
 
@@ -378,8 +562,21 @@ export const register: Register = on => {
     const done = await next(e)
 
     if (e.agentId) {
+      // A subagent we watched answered: it finished, even if the roster drops it before the next reading.
+      if (e.reason === 'answer' && seenRunning.has(e.agentId)) {
+        creditBat(e.agentId)
+        seenRunning.delete(e.agentId)
+        missingSince.delete(e.agentId)
+      }
       await countBats($)
-    } else if (e.usage) {
+    } else if (!e.usage) {
+      // Interrupted or failed with nothing counted: keep its lines, so they don't earn XP on the next turn.
+      if (turnLines > 0) {
+        mine = { ...mine, lines: mine.lines + turnLines }
+        dirty = true
+      }
+      turnLines = 0
+    } else {
       const u = e.usage
       const turn = { ms: e.durationMs, out: u.output_tokens }
       await update($, lastTurn, () => turn)
@@ -387,15 +584,11 @@ export const register: Register = on => {
       // XP for the turn: finishing it, the lines it changed, a warm cache, a tidy context.
       const t = await $.clock.now()
       // turn.complete arrives before the turn's own measurement: read the context as it stands now.
-      const before = await read($, usage) // the last measurement: the context the turn started from
       const live = await $.session.usage()
-      // A turn's usage adds up all its requests: after an expired cache the first rewrites it and the rest read it.
-      // A warm turn writes only what it adds; a cold one also rewrites the context it started from. So writes
-      // beyond the turn's growth by half the starting context or more mean the cache was rebuilt.
-      const startTokens = before?.tokens ?? 0
-      // The turn's own output is in the final context but not yet in the cache: leave it out of the growth.
-      const growth = Math.max(0, (live.context.tokens ?? 0) - startTokens - u.output_tokens)
-      const rebuilt = startTokens > 0 && u.cache_creation_input_tokens >= growth + 0.5 * startTokens
+      // The context the turn started from, as turn.start saw it; else the last measurement.
+      const startTokens = turnStartTokens || ((await read($, usage))?.tokens ?? 0)
+      turnStartTokens = 0
+      const rebuilt = coldStart(startTokens, live.context.tokens ?? 0, u.cache_creation_input_tokens)
       const warm = u.cache_read_input_tokens > 0 && !rebuilt
       const tidy = (live.context.percent ?? 0) < 60
       const isNight = new Date(t).getHours() < 4

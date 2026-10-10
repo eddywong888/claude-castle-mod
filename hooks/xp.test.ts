@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { addStats, emptyStats, isTestCommand, levelOf, longestStreak, profileOf, report, streakOf, turnXp, xpFor } from './xp'
+import { addStats, emptyStats, isTestCommand, levelOf, longestStreak, profileOf, report, streakOf, subStats, turnXp, xpFor } from './xp'
 
 test('levels climb a steepening curve with titles', () => {
   expect(levelOf(0)).toMatchObject({ level: 1, title: 'Wanderer', into: 0, need: 150 })
@@ -88,4 +88,17 @@ test('each compaction raises the castle a tier, up to five', () => {
   expect(profileOf({ ...emptyStats(), compacts: 9 }, '2026-10-09').castleTier).toBe(5)
   const old = { xp: 0, turns: 0, lines: 0, tests: 0, bats: 0, warm: 0, tidy: 0, night: 0, days: [] }
   expect(addStats(old, { ...emptyStats(), compacts: 1 }).compacts).toBe(1)
+})
+
+test('runs that only list or compile tests earn nothing; wrapped runs still count', () => {
+  for (const c of ['npx vitest list', 'go test -c ./pkg', 'go test -run ^$ ./...', "go test -run '^$' ./...", 'pytest --fixtures', 'pytest --markers', 'npx jest --showConfig', 'make test-lint'])
+    expect([c, isTestCommand(c)]).toEqual([c, false])
+  for (const c of ['time npm test', 'env CI=1 npm test', 'timeout 300 npm test', 'uv run pytest', 'npx playwright test', 'npm t', 'npm test &>/dev/null', 'go test -count=1 ./...', 'make test'])
+    expect([c, isTestCommand(c)]).toEqual([c, true])
+})
+
+test('what a record gained since an earlier one', () => {
+  const before = { ...emptyStats(), xp: 100, turns: 5, days: ['2026-10-08'], compacts: 1 }
+  const after = { ...emptyStats(), xp: 130, turns: 7, days: ['2026-10-08', '2026-10-09'], compacts: 2 }
+  expect(subStats(after, before)).toEqual({ ...emptyStats(), xp: 30, turns: 2, days: ['2026-10-09'], compacts: 1 })
 })

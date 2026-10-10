@@ -13,6 +13,8 @@ export type Stats = {
   days: string[]
   /** Times this session's conversation was compacted: each raises the castle a tier. Absent in older records. */
   compacts?: number
+  /** When the record was last saved: a record left unsaved for days belongs to a session that ended. */
+  savedAt?: number
 }
 
 export const emptyStats = (): Stats => ({ xp: 0, turns: 0, lines: 0, tests: 0, bats: 0, warm: 0, tidy: 0, night: 0, days: [], compacts: 0 })
@@ -29,6 +31,23 @@ export function addStats(a: Stats, b: Stats): Stats {
     night: a.night + b.night,
     days: [...new Set([...a.days, ...b.days])].sort(),
     compacts: (a.compacts ?? 0) + (b.compacts ?? 0),
+  }
+}
+
+/** What `a` gained since `b`, a record it grew from: XP and counts subtracted, only the days `b` lacked. */
+export function subStats(a: Stats, b: Stats): Stats {
+  const had = new Set(b.days)
+  return {
+    xp: Math.max(0, a.xp - b.xp),
+    turns: Math.max(0, a.turns - b.turns),
+    lines: Math.max(0, a.lines - b.lines),
+    tests: Math.max(0, a.tests - b.tests),
+    bats: Math.max(0, a.bats - b.bats),
+    warm: Math.max(0, a.warm - b.warm),
+    tidy: Math.max(0, a.tidy - b.tidy),
+    night: Math.max(0, a.night - b.night),
+    days: a.days.filter(d => !had.has(d)),
+    compacts: Math.max(0, (a.compacts ?? 0) - (b.compacts ?? 0)),
   }
 }
 
@@ -133,8 +152,30 @@ export function profileOf(s: Stats, today: string): Profile {
   return { ...lv, xp: s.xp, streak, unlocked, castleTier: Math.min(5, 1 + (s.compacts ?? 0)) }
 }
 
-// A test runner at the start of a command: `npm test`, `pnpm run test`, `pytest`, `go test`, `npx vitest`.
-const TEST_RUNNER = /^((npm|pnpm|yarn|bun)\s+(run\s+)?test\b|(npx\s+|bunx\s+|python3?\s+-m\s+)?(pytest|jest|vitest|mocha|rspec|phpunit)\b|(go|cargo|deno|mix|dotnet)\s+test\b|claude\s+plugin\s+test\b|make\s+test\b)/
+// A test runner at the start of a command: `npm test`, `npm t`, `pnpm run test`, `pytest`, `go test`, `npx vitest`,
+// `npx playwright test`. `make test` alone: `make test-lint` is some other target.
+const TEST_RUNNER = /^((npm|pnpm|yarn|bun)\s+(run\s+)?(test\b|t(\s|$))|(npx\s+|bunx\s+|python3?\s+-m\s+)?(pytest|jest|vitest|mocha|rspec|phpunit)\b|(npx\s+|bunx\s+)?playwright\s+test\b|(go|cargo|deno|mix|dotnet)\s+test\b|claude\s+plugin\s+test\b|make\s+test(\s|$))/
+
+// What may lead a test runner without changing whether its success means the tests passed:
+// `time`, `env A=1`, `timeout 300`, `nice`, `uv run`, `poetry run`, `pipenv run`, and `VAR=value` assignments.
+const LEADER = /^(time\s+|nice\s+|env\s+|timeout\s+(-\S+\s+)*\d+[smhd]?\s+|(uv|poetry|pipenv|pdm|hatch)\s+run\s+|\w+=\S*\s+)/
+
+// Runs that list, collect, compile or explain tests: they succeed without running any.
+const NOT_A_RUN = /(^|\s)(--collect-only|--co|--list-tests|--listTests|-list|--list|--help|-h|--version|--dry-run|--passWithNoTests|--no-run|--setup-plan|--setup-only|--collectOnly|--fixtures|--fixtures-per-test|--markers|--showConfig|--show-config)(\s|=|$)/
+
+/** The runner with whatever leads it dropped: `env CI=1 time npm test` is `npm test`. */
+function runnerOf(part: string): string {
+  let p = part.trim()
+  for (let m = LEADER.exec(p); m; m = LEADER.exec(p)) p = p.slice(m[0].length)
+  return p
+}
+
+/** A runner asked for something other than a run: `vitest list`, `jest list`, `go test -c`, `go test -run ^$`. */
+function onlyLists(runner: string): boolean {
+  if (/^(npx\s+|bunx\s+)?(vitest|jest)\s+list\b/.test(runner)) return true
+  if (/^go\s+test\b/.test(runner) && (/\s-c(\s|$)/.test(runner) || /\s-run[\s=]+\^?\$(\s|$)/.test(runner))) return true
+  return false
+}
 
 /**
  * True when the command's success means a test run passed: a test runner alone, or in an `&&` chain
@@ -143,7 +184,8 @@ const TEST_RUNNER = /^((npm|pnpm|yarn|bun)\s+(run\s+)?test\b|(npx\s+|bunx\s+|pyt
  */
 export function isTestCommand(command: string): boolean {
   // Quoted text is an argument, not a command: `echo "cd app && npm test"` runs no tests.
-  const plain = command.replace(/"[^"]*"|'[^']*'/g, 'Q').replace(/\d*>&\d+/g, '') // `2>&1` only redirects output
+  // `2>&1` and `&>/dev/null` only redirect output.
+  const plain = command.replace(/"[^"]*"|'[^']*'/g, 'Q').replace(/\d*>&\d+/g, '').replace(/&>>?\s*\S+/g, '')
   if (/["']/.test(plain)) return false // an unbalanced quote: can't tell what runs
   // Everything after an unquoted `#` is a comment: `echo ok # && npm test` runs no tests.
   const code = plain.replace(/(^|\s)#.*$/gm, '$1')
@@ -154,11 +196,12 @@ export function isTestCommand(command: string): boolean {
   const quoted: string[] = []
   const masked = command.replace(/"[^"]*"|'[^']*'/g, m => `\u0000${quoted.push(m.slice(1, -1)) - 1}\u0000`)
   const words = masked.replace(/(^|\s)#.*$/gm, '$1').replace(/\u0000(\d+)\u0000/g, (_, i: string) => ` ${quoted[Number(i)]} `)
-  if (/(^|\s)(--collect-only|--co|--list-tests|--listTests|-list|--list|--help|-h|--version|--dry-run|--passWithNoTests|--no-run|--setup-plan|--setup-only|--collectOnly)(\s|=|$)/.test(words)) return false
-  return code
-    .split('&&')
-    .map(part => part.trim().replace(/^(\w+=\S*\s+)+/, '')) // drop leading VAR=value assignments
-    .some(part => TEST_RUNNER.test(part))
+  if (NOT_A_RUN.test(words)) return false
+  // `^$` is masked as a quote when quoted: check the `-run` pattern on the real arguments too.
+  const runners = code.split('&&').map(runnerOf)
+  const realRunners = words.split('&&').map(runnerOf)
+  if (realRunners.some(onlyLists)) return false
+  return runners.some(part => TEST_RUNNER.test(part))
 }
 
 /** The `/castle` report: level, streak, what earned the XP, and every achievement. */

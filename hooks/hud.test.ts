@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { editLines, cacheHit, duration, elapsed, gauge, linesFromPatch, linesOf, legacyEntries, nextCache, spendKey, spendTime, k, moonEmoji, moonLight, spentSince, timeLeftShort } from './hud'
+import { editLines, cacheHit, coldStart, duration, elapsed, linesFromPatch, linesOf, legacyEntries, nextCache, spendKey, spendTime, k, moonLight, spentSince, timeLeftShort } from './hud'
 import { buildSvg, castleSvg, fireLevel, moonPath, zone } from './svg'
 
 const now = Date.parse('2026-10-09T10:00:00Z')
@@ -8,7 +8,7 @@ const now = Date.parse('2026-10-09T10:00:00Z')
 test('moon is full at refresh and new at reset', () => {
   expect(moonLight('five_hour', '2026-10-09T15:00:00Z', now)).toBe(1)
   expect(moonLight('five_hour', '2026-10-09T12:30:00Z', now)).toBe(0.5)
-  expect(moonEmoji('five_hour', '2026-10-09T10:01:00Z', now)).toBe('🌑')
+  expect(moonLight('five_hour', '2026-10-09T10:00:00Z', now)).toBe(0)
   expect(moonPath(12, 22, 11, 1)).toContain('A11.00 11')
 })
 
@@ -18,7 +18,6 @@ test('helpers', () => {
   expect(k(1_000_000)).toBe('1M')
   expect(k(145_000)).toBe('145k')
   expect(cacheHit({ read: 90, written: 5, uncached: 5 })).toBe(90)
-  expect(gauge(50, 4)).toBe('██░░')
   expect(zone(15)).toBe('ink')
   expect(zone(70)).toBe('gold')
   expect(zone(90)).toBe('blood')
@@ -169,4 +168,13 @@ test('cache life is learned from when a turn started, and not just after a compa
   // After a compaction, a cold rewrite 20 minutes later teaches nothing.
   const hour = { ...short, ttlMs: 60 * 60e3, rebased: true }
   expect(nextCache(hour, u(0, 500), now + 21 * 60e3, true, now + 20 * 60e3)?.ttlMs).toBe(60 * 60e3)
+})
+
+test('a warm turn with long replies is not taken for a rebuilt cache', () => {
+  // Started at 40k, wrote 22k of output, ended at 64k with 24k written to the cache: warm.
+  expect(coldStart(40_000, 64_000, 24_000)).toBe(false)
+  // Started at 40k and rewrote all of it plus the 4k it grew by: cold.
+  expect(coldStart(40_000, 44_000, 44_000)).toBe(true)
+  // Nothing to go on before the first measurement.
+  expect(coldStart(0, 10_000, 10_000)).toBe(false)
 })

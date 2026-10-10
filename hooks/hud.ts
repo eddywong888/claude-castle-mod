@@ -1,4 +1,4 @@
-// Pure helpers shared by the desktop SVG and the terminal text band.
+// Pure helpers behind the desktop band: moons, the cache, line counting and formatting.
 
 /** How long the prompt cache stays warm after a reply (this session's 1-hour TTL). */
 export const CACHE_TTL_MS = 60 * 60e3
@@ -32,7 +32,6 @@ export function spentSince(ledger: { t: number; usd: number }[], start: number):
 }
 
 export const WINDOW_MS: Record<string, number> = { five_hour: 5 * 3600e3, seven_day: 7 * 86400e3 }
-const WANING = ['🌕', '🌖', '🌗', '🌘', '🌑']
 
 /** How lit the moon is: 1 (full) when the window has just refreshed, 0 (new) at its reset. */
 export function moonLight(kind: string, resetsAt: string | undefined, now: number): number {
@@ -41,12 +40,6 @@ export function moonLight(kind: string, resetsAt: string | undefined, now: numbe
   const left = Math.max(0, Date.parse(resetsAt) - now)
 
   return Math.min(1, Math.max(0, left / span))
-}
-
-export function moonEmoji(kind: string, resetsAt: string | undefined, now: number): string {
-  const elapsed = 1 - moonLight(kind, resetsAt, now)
-
-  return WANING[Math.round(elapsed * (WANING.length - 1))] ?? '🌑'
 }
 
 export function timeLeftShort(resetsAt: string | undefined, now: number): string {
@@ -145,6 +138,18 @@ export function linesOf(tool: string, input: Record<string, unknown>): { added: 
   return { added: 0, removed: 0 }
 }
 
+/**
+ * Whether a main-loop turn rebuilt the cache rather than reading it. A turn's usage adds up all its requests:
+ * a warm turn writes only what the conversation grew by, while a cold one also rewrites the context it started
+ * from. So writes beyond the growth by half the starting context or more mean the cache was rebuilt. The
+ * growth is the whole change in context: the turn's output is summed over every request, so taking it away
+ * would shrink the growth below what was written and call a warm turn with long replies cold.
+ */
+export function coldStart(startTokens: number, endTokens: number, written: number): boolean {
+  const growth = Math.max(0, endTokens - startTokens)
+  return startTokens > 0 && written >= growth + 0.5 * startTokens
+}
+
 export type CacheState = { read: number; written: number; uncached: number; at: number; model?: string; ttlMs?: number; rebased?: boolean }
 
 const FIVE_MIN = 5 * 60e3
@@ -198,11 +203,4 @@ export function k(n: number): string {
   if (n >= 1000) return `${Math.round(n / 1000)}k`
 
   return String(n)
-}
-
-/** A text gauge for the terminal: filled cells up to the percent. */
-export function gauge(percent: number, width = 16): string {
-  const filled = Math.round((Math.min(100, Math.max(0, percent)) / 100) * width)
-
-  return '█'.repeat(filled) + '░'.repeat(width - filled)
 }

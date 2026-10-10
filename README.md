@@ -76,14 +76,14 @@ Each level needs a little more XP than the last. Titles change at level 1 (Wande
 
 Your **streak** counts the days in a row with at least one finished turn. There are 14 **achievements**, from First Blood (your first turn) to Eternal Night (a 30-day streak). A pop-up appears for each level-up and each new achievement.
 
-Type `/castle` to see your level, where your XP came from and every achievement.
+Type `/castle` to see your level, where your XP came from and every achievement. Type `/castle reset` to start again from level 1: it asks you to confirm, then deletes everything the mod saved.
 
 ## Good to know
 
 - **Cache life.** The cache countdown starts at one hour. If the mod sees the cache expire sooner, it switches to five minutes.
 - **The 5-hour total** counts only sessions running this mod, from when it was installed. Usage on claude.ai or in other tools isn't included.
 - **Lines changed** counts only Claude's Edit and Write tools. Files changed by shell commands such as `sed` or `git` aren't counted.
-- **XP and the 5-hour total** are kept in the mod's own storage on your machine. Nothing is sent anywhere.
+- **XP and the 5-hour total** are kept in the mod's own storage on your machine, a file under `~/.claude/plugins/store/` whose name starts with `castle-hud_`. Nothing is sent anywhere. Sessions that ended more than two days ago are merged into one total, so the file stays small.
 - **Where it shows.** The HUD draws in the desktop app's Code tab. It draws nothing in a terminal, so a status line you've set up there stays as it is, and Claude Code doesn't offer this band in VS Code. Levels, XP and `/castle` still work everywhere.
 
 ## What the hooks do
@@ -94,11 +94,12 @@ The mod only reads what Claude Code reports. It never blocks, changes or rewrite
 |---|---|
 | `session.start` | Reads the session's usage, registers `/castle` and starts a 15-second refresh |
 | `session.end` | Saves your XP. After `/clear` or `/resume`, resets this conversation's figures |
+| `turn.start` | Notes when a turn starts and how full the context was, for the last-turn time and the cache check |
 | `session.compact` | After a compaction finishes, raises the castle a tier and shows the smaller context. The compaction itself is unchanged |
-| `classic.SessionStart` | When a cleared, resumed or compacted conversation starts, reads its starting cost and context |
+| `classic.SessionStart` | When a cleared, resumed, forked or compacted conversation starts, reads its starting cost and context |
 | `session.measure` | Reads the context, rate limits and cost after each turn |
 | `tool.call` | After Edit or Write succeeds, counts the lines changed. After a Bash test command passes, adds XP. Always passes the call through unchanged |
-| `command.run` | Answers `/castle` with your level and achievements |
+| `command.run` | Answers `/castle` with your level and achievements, and `/castle reset` |
 | `agent.spawn` | Notes a new subagent for the bat count. The subagent starts unchanged |
 | `turn.complete` | Records the last turn's time, output tokens, cache use and XP. The answer is unchanged |
 | `ui.render` | Draws the HUD above the prompt |
