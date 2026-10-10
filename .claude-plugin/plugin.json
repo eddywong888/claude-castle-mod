@@ -1,8 +1,8 @@
 {
   "name": "castle-hud",
   "displayName": "Castle HUD",
-  "version": "0.7.10",
-  "description": "Castlevania-style HUD above the Claude Code prompt: context blood meter, rate-limit moons, cache stopwatch, costs, subagent bats, a burning castle, and levels with achievements",
+  "version": "0.7.11",
+  "description": "A Castlevania-style HUD above the prompt in the Claude Code desktop app. It shows how full the context is (a blood meter), your 5-hour and weekly limits (moons), how long the prompt cache stays warm (a stopwatch), what this session and the 5-hour window cost, how long the session has run, the last turn, lines changed and running subagents (bats). A pixel castle catches fire as the context fills and grows bolder with each compaction. You earn XP, levels, daily streaks and 14 achievements as you work; type /castle to see them. Everything stays on your machine.",
   "author": {
     "name": "Eddy Wong"
   },
