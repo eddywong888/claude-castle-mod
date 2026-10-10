@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { editLines, cacheHit, coldStart, duration, elapsed, linesFromPatch, linesOf, legacyEntries, nextCache, spendKey, spendTime, k, moonLight, spentSince, timeLeftShort } from './hud'
+import { editLines, cacheHit, duration, elapsed, linesFromPatch, linesOf, legacyEntries, nextCache, spendKey, spendTime, k, moonLight, spentSince, timeLeftShort, wasWarm } from './hud'
 import { buildSvg, castleSvg, fireLevel, moonPath, zone } from './svg'
 
 const now = Date.parse('2026-10-09T10:00:00Z')
@@ -86,22 +86,15 @@ test('session time', () => {
   expect(s.alt).toContain('Session running 1h 42m')
 })
 
-test('cache follows real cache activity and learns its life', () => {
-  const u = (read: number, written: number, model = 'm') => ({ cache_read_input_tokens: read, cache_creation_input_tokens: written, input_tokens: 10, model })
+test('the cache follows real cache activity and stays warm for an hour', () => {
+  const u = (read: number, written: number) => ({ cache_read_input_tokens: read, cache_creation_input_tokens: written, input_tokens: 10 })
   const first = nextCache(null, u(0, 500), now)
-  expect(first?.ttlMs).toBe(60 * 60e3)
+  expect(first).toEqual({ read: 0, written: 500, uncached: 10, at: now })
   // A reply with no cache activity leaves the countdown alone.
   expect(nextCache(first, u(0, 0), now + 60e3)).toBe(first)
-  // Read again after 20 minutes: the cache lasts an hour.
-  expect(nextCache(first, u(400, 10), now + 20 * 60e3)?.ttlMs).toBe(60 * 60e3)
-  // Rewritten with nothing read after 20 minutes: it lasted five.
-  expect(nextCache(first, u(0, 500), now + 20 * 60e3)?.ttlMs).toBe(5 * 60e3)
-  // A different model starts its own cache: nothing is learned from the gap.
-  expect(nextCache(first, u(0, 500, 'other'), now + 20 * 60e3)?.ttlMs).toBe(60 * 60e3)
-  // A model that learned five minutes doesn't pass that on to the next model.
-  const short = nextCache(first, u(0, 500), now + 20 * 60e3)
-  expect(short?.ttlMs).toBe(5 * 60e3)
-  expect(nextCache(short, u(0, 500, 'other'), now + 21 * 60e3)?.ttlMs).toBe(60 * 60e3)
+  expect(wasWarm(first, now + 59 * 60e3)).toBe(true)
+  expect(wasWarm(first, now + 61 * 60e3)).toBe(false)
+  expect(wasWarm(null, now)).toBe(false)
 })
 
 test('castle burns as the context fills', () => {
@@ -147,34 +140,4 @@ test('castle grows bolder with its tier, keeping all its towers', () => {
   expect(castleSvg(0, 4).source).toContain('96,-6') // taller main spire
   expect(spires(5)).toBe(4) // and the crest
   expect(castleSvg(0, 9).alt).toContain('tier 5 of 5')
-})
-
-test('a cold start keeps its real cache counts but learns the short life', () => {
-  const u = { cache_read_input_tokens: 45000, cache_creation_input_tokens: 5000, input_tokens: 10, model: 'm' }
-  const first = nextCache(null, { ...u, cache_read_input_tokens: 0 }, now)
-  const cold = nextCache(first, u, now + 20 * 60e3, true)
-  expect(cold?.read).toBe(45000)
-  expect(cold?.ttlMs).toBe(5 * 60e3)
-  expect(nextCache(first, u, now + 20 * 60e3, false)?.ttlMs).toBe(60 * 60e3)
-})
-
-test('cache life is learned from when a turn started, and not just after a compaction', () => {
-  const u = (read: number, written: number) => ({ cache_read_input_tokens: read, cache_creation_input_tokens: written, input_tokens: 10, model: 'm' })
-  const short = { ...nextCache(null, u(0, 500), now)!, ttlMs: 5 * 60e3 }
-  // Started 4 minutes after the last reply (cache still warm), finished at 6: no evidence of an hour-long cache.
-  expect(nextCache(short, u(400, 10), now + 6 * 60e3, false, now + 4 * 60e3)?.ttlMs).toBe(5 * 60e3)
-  // Started 20 minutes after and still read: the cache lasts an hour.
-  expect(nextCache(short, u(400, 10), now + 21 * 60e3, false, now + 20 * 60e3)?.ttlMs).toBe(60 * 60e3)
-  // After a compaction, a cold rewrite 20 minutes later teaches nothing.
-  const hour = { ...short, ttlMs: 60 * 60e3, rebased: true }
-  expect(nextCache(hour, u(0, 500), now + 21 * 60e3, true, now + 20 * 60e3)?.ttlMs).toBe(60 * 60e3)
-})
-
-test('a warm turn with long replies is not taken for a rebuilt cache', () => {
-  // Started at 40k, wrote 22k of output, ended at 64k with 24k written to the cache: warm.
-  expect(coldStart(40_000, 64_000, 24_000)).toBe(false)
-  // Started at 40k and rewrote all of it plus the 4k it grew by: cold.
-  expect(coldStart(40_000, 44_000, 44_000)).toBe(true)
-  // Nothing to go on before the first measurement.
-  expect(coldStart(0, 10_000, 10_000)).toBe(false)
 })

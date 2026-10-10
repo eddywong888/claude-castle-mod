@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage } from 'claude-code'
 
 import type { Usage } from '../types'
-import { coldStart, editLines, legacyEntries, nextCache, spendKey, spendTime, spentSince, WINDOW_MS } from './hud'
+import { editLines, legacyEntries, nextCache, spendKey, spendTime, spentSince, wasWarm, WINDOW_MS } from './hud'
 import { buildSvg, castleSvg, NIGHT } from './svg'
 import { ACHIEVEMENTS, addStats, dayKey, emptyStats, isTestCommand, profileOf, report, subStats, turnXp, XP } from './xp'
 import type { Stats } from './xp'
@@ -77,8 +77,6 @@ const OTHERS_EVERY_MS = 5 * 60e3
 let turnLines = 0
 // When the main conversation's current turn started (turn.start fires for the main loop only).
 let turnStartedAt = 0
-// The context when it started: a measurement in the middle of a turn moves the usage atom on.
-let turnStartTokens = 0
 let dirty = false
 // The level and achievements last shown, to toast what is new; null until the first profile is read.
 let known: { level: number; unlocked: Set<string> } | null = null
@@ -352,7 +350,6 @@ async function forgetConversation($: EngineInterface) {
   // Until the new conversation's baseline is read, cost changes count as nothing rather than as old spend.
   lastUsd = undefined
   turnLines = 0
-  turnStartTokens = 0
   await update($, lines, () => ({ added: 0, removed: 0 }))
   await update($, lastTurn, () => null)
   await update($, cache, () => null)
@@ -460,9 +457,6 @@ export const register: Register = on => {
           if (n >= 1 && n <= 4) $.ui.toast(`Castle rebuilt to tier ${n + 1} of 5`)
         })
         .catch(() => undefined)
-      // The cached prefix changed: the next turn's rewrite isn't evidence of an expired cache.
-      const c = await read($, cache)
-      if (c) await update($, cache, () => ({ ...c, rebased: true }))
       // The compacted size comes with the result: show it now, which also puts the fire out. The engine
       // installs the new conversation after this hook returns, so reading the session here would be too early.
       const u = await read($, usage)
@@ -477,7 +471,6 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     turnStartedAt = await $.clock.now()
-    turnStartTokens = (await read($, usage))?.tokens ?? 0
 
     return next(e)
   })
@@ -585,11 +578,9 @@ export const register: Register = on => {
       const t = await $.clock.now()
       // turn.complete arrives before the turn's own measurement: read the context as it stands now.
       const live = await $.session.usage()
-      // The context the turn started from, as turn.start saw it; else the last measurement.
-      const startTokens = turnStartTokens || ((await read($, usage))?.tokens ?? 0)
-      turnStartTokens = 0
-      const rebuilt = coldStart(startTokens, live.context.tokens ?? 0, u.cache_creation_input_tokens)
-      const warm = u.cache_read_input_tokens > 0 && !rebuilt
+      // Warm: the turn started within the hour after the last reply, and read the cache.
+      const prev = await read($, cache)
+      const warm = u.cache_read_input_tokens > 0 && wasWarm(prev?.at ? prev : null, turnStartedAt || t)
       const tidy = (live.context.percent ?? 0) < 60
       const isNight = new Date(t).getHours() < 4
       const day = dayKey(t)
@@ -612,9 +603,7 @@ export const register: Register = on => {
       dirty = true
       void syncProfile($) // the turn doesn't wait for the profile
       const at = await $.clock.now()
-      const prev = await read($, cache)
-      // The real counts are kept for the hit rate; `rebuilt` only steers what the lifetime learns.
-      const next2 = nextCache(prev?.at ? prev : null, u, at, rebuilt, turnStartedAt || at)
+      const next2 = nextCache(prev?.at ? prev : null, u, at)
       if (next2 !== prev) await update($, cache, () => next2)
     }
 

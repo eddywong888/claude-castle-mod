@@ -1,6 +1,6 @@
 // Pure helpers behind the desktop band: moons, the cache, line counting and formatting.
 
-/** How long the prompt cache stays warm after a reply (this session's 1-hour TTL). */
+/** How long the prompt cache stays warm after a reply: Claude Code's 1-hour cache. */
 export const CACHE_TTL_MS = 60 * 60e3
 
 /** The store key for one cost increase: `spend:<time>:<session id>:<sequence>`, unique even within a millisecond. */
@@ -138,52 +138,23 @@ export function linesOf(tool: string, input: Record<string, unknown>): { added: 
   return { added: 0, removed: 0 }
 }
 
-/**
- * Whether a main-loop turn rebuilt the cache rather than reading it. A turn's usage adds up all its requests:
- * a warm turn writes only what the conversation grew by, while a cold one also rewrites the context it started
- * from. So writes beyond the growth by half the starting context or more mean the cache was rebuilt. The
- * growth is the whole change in context: the turn's output is summed over every request, so taking it away
- * would shrink the growth below what was written and call a warm turn with long replies cold.
- */
-export function coldStart(startTokens: number, endTokens: number, written: number): boolean {
-  const growth = Math.max(0, endTokens - startTokens)
-  return startTokens > 0 && written >= growth + 0.5 * startTokens
-}
+export type CacheState = { read: number; written: number; uncached: number; at: number }
 
-export type CacheState = { read: number; written: number; uncached: number; at: number; model?: string; ttlMs?: number; rebased?: boolean }
-
-const FIVE_MIN = 5 * 60e3
-
-/**
- * The cache after a main-loop reply. A reply that neither read nor wrote the cache leaves it as it was.
- * The cache's life is learned from what happens after a gap longer than five minutes: still read, it lasts
- * an hour; written afresh with nothing read, it lasted five minutes.
- */
+/** The cache after a main-loop reply: its counts, and the time it warms for an hour from. A reply that neither read nor wrote it leaves it as it was. */
 export function nextCache(
   prev: CacheState | null,
-  u: { cache_read_input_tokens: number; cache_creation_input_tokens: number; input_tokens: number; model?: string },
+  u: { cache_read_input_tokens: number; cache_creation_input_tokens: number; input_tokens: number },
   at: number,
-  coldStart = false,
-  startedAt = at,
 ): CacheState | null {
   const read = u.cache_read_input_tokens
   const written = u.cache_creation_input_tokens
   if (read + written === 0) return prev
-  // A turn that started cold rebuilt the cache, whatever its later requests read: learn from it as unread.
-  const readWhenStarted = coldStart ? 0 : read
-  const sameModel = !prev?.model || !u.model || prev.model === u.model
-  // A different model has its own cache: start again from the default lifetime.
-  let ttlMs = sameModel ? (prev?.ttlMs ?? CACHE_TTL_MS) : CACHE_TTL_MS
-  // After a compaction the cached prefix changed: the next rewrite says nothing about the cache's life.
-  if (prev?.at && sameModel && !prev.rebased) {
-    // The idle gap is from the last reply to when this turn started: its reads happened then, not at its end.
-    const gap = startedAt - prev.at
-    if (gap > FIVE_MIN && gap < CACHE_TTL_MS) {
-      if (readWhenStarted > 0) ttlMs = CACHE_TTL_MS
-      else if (written > 0) ttlMs = FIVE_MIN
-    }
-  }
-  return { read, written, uncached: u.input_tokens, at, model: u.model, ttlMs }
+  return { read, written, uncached: u.input_tokens, at }
+}
+
+/** Whether a turn that started at `startedAt` found the cache warm: an earlier reply less than an hour before. */
+export function wasWarm(prev: CacheState | null, startedAt: number): boolean {
+  return !!prev?.at && startedAt - prev.at < CACHE_TTL_MS
 }
 
 /** Session length as hours and minutes: `1h 42m`, `7m`. */

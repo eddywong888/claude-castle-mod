@@ -80,7 +80,7 @@ Type `/castle` to see your level, where your XP came from and every achievement.
 
 ## Good to know
 
-- **Cache life.** The cache countdown starts at one hour. If the mod sees the cache expire sooner, it switches to five minutes.
+- **Cache life.** The stopwatch counts down one hour from each reply, the life of Claude Code's prompt cache. A reply counts as warm when it comes within that hour.
 - **The 5-hour total** counts only sessions running this mod, from when it was installed. Usage on claude.ai or in other tools isn't included.
 - **Lines changed** counts only Claude's Edit and Write tools. Files changed by shell commands such as `sed` or `git` aren't counted.
 - **XP and the 5-hour total** are kept in the mod's own storage on your machine, a file under `~/.claude/plugins/store/` whose name starts with `castle-hud_`. Nothing is sent anywhere. Sessions that ended more than two days ago are merged into one total, so the file stays small.
