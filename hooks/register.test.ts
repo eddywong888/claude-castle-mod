@@ -153,6 +153,9 @@ test('a session folds its own record into the archive as its conversation ends',
   expect(key in archive.folded).toBe(true)
   // Counted once, by the archive, from now on.
   expect(await xpTotal($ as never)).toBe(25)
+  // Deleted once the fold has stood a few minutes.
+  await clock.advance(6 * 60e3)
+  expect(await xpTotal($ as never)).toBe(25)
   expect(store.has(key)).toBe(false)
 })
 
@@ -266,4 +269,43 @@ test('the stopwatch shows cold within a refresh of the cache expiring', async ($
   // 15 seconds after it expires: the band says cold, not "1m".
   await clock.advance(60 * 60e3 + 15_000)
   expect(await band($ as never)).toContain('cache expired')
+})
+
+test('a fold dropped by a stale archive write leaves the record to be counted again', async ($, on) => {
+  const { clock, store } = world(on)
+  on('tool.call', () => ({ result: {} }) as never)
+  await $.session.start(start as never)
+  await $.tool.call({ tool: 'Bash', command: 'npm test' } as never)
+  await clock.advance(15_000)
+  const before = new Map(store)
+  await $.session.end({ reason: 'clear', sessionId: 's1', resume: undefined } as never)
+  // A pass right after the fold sees it counted in the archive.
+  expect(await xpTotal($ as never)).toBe(25)
+  // Another session, having read the archive before this fold, writes its stale copy back.
+  store.set('archive:xp', before.get('archive:xp') ?? { total: rec(0, 0), folded: {} })
+  await clock.advance(10 * 60e3)
+  expect(await xpTotal($ as never)).toBe(25)
+})
+
+test('a partly counted older archive adds nothing twice', async ($, on) => {
+  const { store } = world(on, {
+    'archive:xp': { total: rec(100, 0), folded: { 'xp:a': T0 } },
+    'xp:archive': { total: rec(140, 0), folded: { 'xp:a': T0, 'xp:b': T0 } },
+    'xp:b': rec(40, T0 - 10e3),
+  })
+  await $.session.start(start as never)
+  expect(await xpTotal($ as never)).toBe(140)
+  expect(store.has('xp:archive')).toBe(false)
+})
+
+test('/castle reset also clears this conversation’s figures, so nothing is saved back', async ($, on) => {
+  const { clock, store } = world(on)
+  on('tool.call', () => ({ result: { structuredPatch: [{ lines: ['+a', '-b'] }] } }) as never)
+  await $.session.start(start as never)
+  await $.tool.call({ tool: 'Edit', file_path: '/x', old_string: 'b', new_string: 'a' } as never)
+  await clock.advance(15_000)
+  await $.command.run({ command: 'castle', args: 'reset confirm' } as never)
+  await $.tool.call({ tool: 'Edit', file_path: '/x', old_string: 'b', new_string: 'a' } as never)
+  await clock.advance(15_000)
+  expect((store.get('conv:s1') as { lines: unknown }).lines).toEqual({ added: 1, removed: 1 })
 })

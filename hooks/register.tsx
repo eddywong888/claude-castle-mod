@@ -68,6 +68,9 @@ const OLD_ARCHIVE = 'xp:archive'
 type Archive = { total: Stats; folded: Record<string, number> }
 const FOLD_AFTER_MS = 7 * 86400e3
 const FORGET_FOLDED_MS = 30 * 86400e3
+// A folded record is deleted only once its fold has stood this long: a session that read the archive before the
+// fold and wrote it back after would drop the fold, and the record must still be there to be counted again.
+const FOLD_GRACE_MS = 5 * 60e3
 // The level and achievements already toasted, shared by every session so each is toasted once, not once a window.
 const TOASTED = 'toasted'
 // The 5-hour window's last known reset, kept for the moments before Claude Code's first reading.
@@ -274,9 +277,13 @@ async function readArchive($: EngineInterface): Promise<Archive> {
 function mergeArchives(a: Partial<Archive> | undefined, old: Partial<Archive>): Archive {
   const total = a?.total ?? emptyStats()
   const folded = { ...(a?.folded ?? {}) }
-  const oldFolded = old.folded ?? {}
-  const fresh = !a || Object.keys(oldFolded).length === 0 || Object.keys(oldFolded).some(k => !(k in folded))
-  return { total: fresh && old.total ? addStats(total, old.total) : total, folded: { ...oldFolded, ...folded } }
+  const oldKeys = Object.keys(old.folded ?? {})
+  const counted = oldKeys.filter(k => k in folded)
+  // Nothing of it counted yet: add it whole. All of it counted already: nothing to add.
+  if (!a || counted.length === 0) return { total: old.total ? addStats(total, old.total) : total, folded: { ...old.folded, ...folded } }
+  // Partly counted: its total can't be split, so add none of it, and leave its new records unmarked, to be counted
+  // as records (and folded again) rather than twice.
+  return { total, folded }
 }
 
 /** Moves this session on to a fresh record, keeping only what the saved one (now counted elsewhere) lacks. */
@@ -333,8 +340,11 @@ async function readOthers($: EngineInterface, now: number): Promise<Map<string, 
   if (XP_KEY in archive.folded) await moveToNewRecord($)
   for (const key of keys) {
     if (!key.startsWith('xp:') || key === XP_KEY || key === OLD_ARCHIVE) continue
-    if (key in archive.folded) {
-      await $.store.delete(key) // counted in the archive
+    const foldedAt = archive.folded[key]
+    if (foldedAt !== undefined) {
+      // Counted in the archive. Deleted once the fold has stood a while; if a stale write drops the fold before
+      // then, the record is no longer listed and counts as a record again, to be folded anew.
+      if (now - foldedAt > FOLD_GRACE_MS) await $.store.delete(key)
       continue
     }
     // Saved within the week: an open session's (they save hourly), or one that just ended and will fold itself.
@@ -425,6 +435,12 @@ async function wipe($: EngineInterface) {
   known = null
   seenSpend.clear()
   knownReset = undefined
+  // This conversation's figures too: kept, the next save would write them back.
+  turnLines = 0
+  convDirty = false
+  await update($, lines, () => ({ added: 0, removed: 0 }))
+  await update($, lastTurn, () => null)
+  await update($, cache, () => null)
   await update($, profile, () => null)
   await update($, windowUsd, () => null)
 }
@@ -441,8 +457,13 @@ async function forgetConversation($: EngineInterface) {
   convDirty = false
 }
 
-/** Saves this conversation's figures under its id, if they changed. */
-async function saveConversation($: EngineInterface) {
+/** Saves this conversation's figures under its id, if they changed: in turn with the XP saves and a reset. */
+function saveConversation($: EngineInterface): Promise<void> {
+  saving = saving.catch(() => undefined).then(() => writeConversation($))
+  return saving
+}
+
+async function writeConversation($: EngineInterface) {
   if (!convDirty) return
   convDirty = false
   try {
