@@ -174,7 +174,8 @@ export function duration(ms: number): string {
 }
 
 export function k(n: number): string {
-  if (n >= 1e6) return `${+(n / 1e6).toFixed(1)}M`
+  // From 999,500 a thousands count would round to "1000k": show it as millions.
+  if (n >= 999_500) return `${+(n / 1e6).toFixed(1)}M`
   if (n >= 1000) return `${Math.round(n / 1000)}k`
 
   return String(n)

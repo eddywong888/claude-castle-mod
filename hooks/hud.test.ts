@@ -17,6 +17,8 @@ test('helpers', () => {
   expect(timeLeftShort('2026-10-12T12:00:00Z', now)).toBe('3d 2h')
   expect(k(1_000_000)).toBe('1M')
   expect(k(145_000)).toBe('145k')
+  expect(k(999_600)).toBe('1M')
+  expect(k(999_400)).toBe('999k')
   expect(cacheHit({ read: 90, written: 5, uncached: 5 })).toBe(90)
   expect(zone(15)).toBe('ink')
   expect(zone(70)).toBe('gold')

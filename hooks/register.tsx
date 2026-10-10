@@ -314,6 +314,8 @@ async function leaveIfFolded($: EngineInterface) {
  */
 async function foldMine($: EngineInterface) {
   if (!lastSaved) return
+  // Gone from the store since it was saved (another session's /castle reset, or a fold): don't put it back.
+  if ((await $.store.get(XP_KEY)) === undefined) return moveToNewRecord($)
   const archive = await readArchive($)
   if (!(XP_KEY in archive.folded)) {
     const now = await $.clock.now()
@@ -778,7 +780,8 @@ export const register: Register = on => {
       // Warm: the turn started within the hour after the last reply, and read the cache.
       const prev = await read($, cache)
       const warm = u.cache_read_input_tokens > 0 && wasWarm(prev?.at ? prev : null, turnStartedAt || t)
-      const tidy = (live.context.percent ?? 0) < 60
+      // Unmeasured (just after a compaction) isn't evidence of a tidy context.
+      const tidy = live.context.percent !== undefined && live.context.percent < 60
       const isNight = new Date(t).getHours() < 4
       const day = dayKey(t)
       // Only an answered turn earns XP, counts as finished and marks the day; a cancelled or failed one

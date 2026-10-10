@@ -309,3 +309,15 @@ test('/castle reset also clears this conversation’s figures, so nothing is sav
   await clock.advance(15_000)
   expect((store.get('conv:s1') as { lines: unknown }).lines).toEqual({ added: 1, removed: 1 })
 })
+
+test('a session closing after another session’s reset doesn’t put its old XP back', async ($, on) => {
+  const { clock, store } = world(on)
+  on('tool.call', () => ({ result: {} }) as never)
+  await $.session.start(start as never)
+  await $.tool.call({ tool: 'Bash', command: 'npm test' } as never)
+  await clock.advance(15_000)
+  // Another session's /castle reset confirm empties the store.
+  store.clear()
+  await $.session.end({ reason: 'other', sessionId: 's1', resume: undefined } as never)
+  expect((store.get('archive:xp') as { total: Stats } | undefined)?.total.xp ?? 0).toBe(0)
+})
