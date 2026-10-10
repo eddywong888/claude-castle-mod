@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage } from 'claude-code'
 
-import type { Usage } from '../types'
+import type { Cache, LastTurn, Lines, Usage } from '../types'
 import { CACHE_TTL_MS, editLines, legacyEntries, nextCache, spendKey, spendTime, spentSince, wasWarm, WINDOW_MS } from './hud'
 import { buildSvg, castleSvg, NIGHT } from './svg'
 import { ACHIEVEMENTS, addStats, dayKey, emptyStats, isTestCommand, profileOf, report, subStats, turnXp, XP } from './xp'
@@ -83,6 +83,11 @@ let turnStartedAt = 0
 // How long the prompt cache lasts: an hour, unless a model switch reports otherwise.
 let cacheTtlMs = CACHE_TTL_MS
 let dirty = false
+// This conversation's own figures (lines changed, last turn, cache), saved under its id so a restart restores them.
+const CONV = 'conv:'
+const CONV_KEEP_MS = 30 * 86400e3
+type Conversation = { lines: Lines; lastTurn: LastTurn | null; cache: Cache | null; at: number }
+let convDirty = false
 // The level and achievements last shown, to toast what is new; null until the first profile is read.
 let known: { level: number; unlocked: Set<string> } | null = null
 
@@ -405,6 +410,42 @@ async function forgetConversation($: EngineInterface) {
   await update($, lines, () => ({ added: 0, removed: 0 }))
   await update($, lastTurn, () => null)
   await update($, cache, () => null)
+  // The old conversation's figures were saved as it ended; nothing new is unsaved yet.
+  convDirty = false
+}
+
+/** Saves this conversation's figures under its id, if they changed. */
+async function saveConversation($: EngineInterface) {
+  if (!convDirty) return
+  convDirty = false
+  try {
+    const saved: Conversation = { lines: await read($, lines), lastTurn: await read($, lastTurn), cache: await read($, cache), at: await $.clock.now() }
+    await $.store.set(CONV + (await $.session.id()), saved)
+  } catch (err) {
+    convDirty = true // tried again on the next refresh
+    throw err
+  }
+}
+
+/** Puts back this conversation's figures as they were last saved: after a restart, or on /resume. */
+async function restoreConversation($: EngineInterface) {
+  // A hot reload keeps the figures it had, which are newer than any saved: leave them.
+  if ((await read($, lastTurn)) || (await read($, lines)).added + (await read($, lines)).removed > 0) return
+  const saved = (await $.store.get(CONV + (await $.session.id()))) as Partial<Conversation> | undefined
+  if (!saved) return
+  await update($, lines, () => saved.lines ?? { added: 0, removed: 0 })
+  await update($, lastTurn, () => saved.lastTurn ?? null)
+  await update($, cache, () => saved.cache ?? null)
+}
+
+/** Deletes saved conversations not touched for a month. */
+async function pruneConversations($: EngineInterface) {
+  const now = await $.clock.now()
+  for (const key of await $.store.keys()) {
+    if (!key.startsWith(CONV)) continue
+    const saved = (await $.store.get(key)) as Partial<Conversation> | undefined
+    if (!saved || now - (saved.at ?? 0) > CONV_KEEP_MS) await $.store.delete(key)
+  }
 }
 
 /** Re-reads the context and limits now, rather than waiting for the next turn's measurement. */
@@ -423,6 +464,7 @@ async function startOver($: EngineInterface) {
   lastUsd = now.cost?.usd
   await update($, startedAt, () => now.startedAt)
   await noteReset($, u)
+  await restoreConversation($).catch(() => undefined)
 }
 
 export const register: Register = on => {
@@ -448,6 +490,7 @@ export const register: Register = on => {
       // Re-sum the window each refresh, so it drops back to $0 after a reset even when idle.
       await attempt(() => resum($))
       await attempt(() => syncProfile($))
+      await attempt(() => saveConversation($))
     }
     // The timer first: if anything below fails, the band still keeps time.
     $.clock.every(15_000, () => void refresh())
@@ -477,6 +520,7 @@ export const register: Register = on => {
       }
     })
     await attempt(() => startOver($))
+    await attempt(() => pruneConversations($))
     await refresh()
 
     return result
@@ -486,6 +530,7 @@ export const register: Register = on => {
   on('session.end', async ($, e, next) => {
     // Save and fold first: the hooks share a short time limit at exit, and XP earned since the last refresh
     // mustn't be lost. The conversation is over, so its record goes into the archive.
+    await saveConversation($).catch(() => undefined)
     await saveMine($)
       .then(() => (dirty ? undefined : foldMine($)))
       .catch(() => undefined)
@@ -512,6 +557,7 @@ export const register: Register = on => {
     const result = await next(e)
     cacheTtlMs = e.cache_ttl === '5m' ? 5 * 60e3 : CACHE_TTL_MS
     await update($, cache, () => null)
+    convDirty = true
 
     return result
   }).catch(($, e, next) => next(e))
@@ -533,6 +579,7 @@ export const register: Register = on => {
         .catch(() => undefined)
       // The conversation the cache held is gone: the next reply writes a new one.
       await update($, cache, () => null)
+      convDirty = true
       // The compacted size comes with the result: show it now, which also puts the fire out. The engine
       // installs the new conversation after this hook returns, so reading the session here would be too early.
       const u = await read($, usage)
@@ -576,7 +623,10 @@ export const register: Register = on => {
     if (isEdit && ran.deny === undefined && ran.isError !== true) {
       const d = editLines(e.tool, e as unknown as Record<string, unknown>, ran.result)
       turnLines += d.added + d.removed
-      if (d.added + d.removed > 0) await update($, lines, l => ({ added: l.added + d.added, removed: l.removed + d.removed }))
+      if (d.added + d.removed > 0) {
+        await update($, lines, l => ({ added: l.added + d.added, removed: l.removed + d.removed }))
+        convDirty = true
+      }
     }
 
     return ran
@@ -650,6 +700,7 @@ export const register: Register = on => {
       const u = e.usage
       const turn = { ms: e.durationMs, out: u.output_tokens }
       await update($, lastTurn, () => turn)
+      convDirty = true
 
       // XP for the turn: finishing it, the lines it changed, a warm cache, a tidy context.
       const t = await $.clock.now()

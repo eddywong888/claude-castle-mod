@@ -10,7 +10,7 @@ const RESET = '2026-10-09T12:00:00Z'
 function world(on: On, entries: Record<string, unknown> = {}) {
   const clock = mock.clock(on, { now: T0 })
   const store = new Map<string, unknown>(Object.entries(entries))
-  const s = { usd: 0, tokens: undefined as number | undefined, agents: [] as { id: string; status: string }[], toasts: [] as string[] }
+  const s = { id: 's1', usd: 0, tokens: undefined as number | undefined, agents: [] as { id: string; status: string }[], toasts: [] as string[] }
   on('store.get', (_$, e) => ({ value: store.get(e.key) }))
   on('store.set', (_$, e) => {
     store.set(e.key, JSON.parse(JSON.stringify(e.value)))
@@ -30,6 +30,7 @@ function world(on: On, entries: Record<string, unknown> = {}) {
     cost: { usd: s.usd },
   } }))
   on('agent.list', () => ({ value: s.agents }) as never)
+  on('session.id', () => ({ value: s.id }))
   on('command.register', () => ({ value: { command: 'castle' } }))
   on('ui.toast', (_$, e) => {
     s.toasts.push(e.text)
@@ -183,4 +184,19 @@ test('/castle reset  confirm works with extra spaces', async ($, on) => {
   await $.session.start(start as never)
   await $.command.run({ command: 'castle', args: ' reset   confirm ' } as never)
   expect(store.size).toBe(0)
+})
+
+test('a conversation’s lines changed and last turn are saved, and restored after a restart', async ($, on) => {
+  const { clock, store } = world(on, {
+    'conv:s1': { lines: { added: 7, removed: 2 }, lastTurn: { ms: 9000, out: 4000 }, cache: null, at: T0 - 60e3 },
+    'conv:gone': { lines: { added: 1, removed: 0 }, lastTurn: null, cache: null, at: T0 - 40 * 86400e3 },
+  })
+  on('tool.call', () => ({ result: { structuredPatch: [{ lines: ['+a'] }] } }) as never)
+  await $.session.start(start as never)
+  expect(store.has('conv:gone')).toBe(false) // a month untouched
+  await $.tool.call({ tool: 'Edit', file_path: '/x', old_string: '', new_string: 'a' } as never)
+  await clock.advance(15_000)
+  // Restored 7 and 2, then one more line added.
+  expect((store.get('conv:s1') as { lines: unknown }).lines).toEqual({ added: 8, removed: 2 })
+  expect((store.get('conv:s1') as { lastTurn: unknown }).lastTurn).toEqual({ ms: 9000, out: 4000 })
 })
