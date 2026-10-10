@@ -527,8 +527,10 @@ export const register: Register = on => {
         const c = await read($, cache)
         const expires = c?.at ? c.at + (c.ttlMs ?? CACHE_TTL_MS) : 0
         const minute = Math.floor(now / 60000) * 60000
-        const mark = expires > minute && expires <= now ? expires : minute
-        if (mark !== (await read($, tick))) await update($, tick, () => mark)
+        const prev = await read($, tick)
+        // Never back within a minute: a new cache after the expiry was marked mustn't move the band's clock back.
+        const mark = Math.max(expires > minute && expires <= now ? expires : minute, prev >= minute && prev <= now ? prev : 0)
+        if (mark !== prev) await update($, tick, () => mark)
       })
       // Re-sum the window each refresh, so it drops back to $0 after a reset even when idle.
       await attempt(() => resum($))
