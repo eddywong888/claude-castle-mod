@@ -41,7 +41,7 @@ If the HUD doesn't change after the reload, restart Claude Code. Restart any oth
 | <img src="screenshots/icons/bag.svg" height="22" alt=""> | **Money bag** | What every session running the mod spent in the current 5-hour window. Starts again from $0 when the window resets. |
 | <img src="screenshots/icons/candle.svg" height="22" alt=""> | **Candle** | How long the session has run. The candle burns down over eight hours. |
 | <img src="screenshots/icons/dagger.svg" height="22" alt=""> | **Dagger** | How long the last reply took and how many tokens it wrote. |
-| <img src="screenshots/icons/scroll.svg" height="22" alt=""> | **Scroll** | Lines added and removed by Claude's Edit and Write tools this session. |
+| <img src="screenshots/icons/scroll.svg" height="22" alt=""> | **Scroll** | Lines added and removed by Claude's Edit and Write tools in this conversation. |
 | <img src="screenshots/icons/bat.svg" height="22" alt=""> | **Bats** | One flapping bat per subagent running now. |
 | <img src="screenshots/icons/crest.svg" height="22" alt=""> | **Crest** | Your level, title, XP toward the next level and your daily streak. |
 
@@ -94,10 +94,10 @@ The mod only reads what Claude Code reports. It never blocks, changes or rewrite
 | Hook | What it does |
 |---|---|
 | `session.start` | Reads the session's usage, registers `/castle` and starts a 15-second refresh |
-| `session.end` | Saves your XP and adds it to the saved total. After `/clear` or `/resume`, resets this conversation's figures |
+| `session.end` | Saves this conversation's figures and your XP, and adds the XP to the saved total |
 | `turn.start` | Notes when a turn starts, to tell whether it found the cache warm |
 | `session.compact` | After a compaction finishes, raises the castle a tier and shows the smaller context. The compaction itself is unchanged |
-| `classic.SessionStart` | When a cleared, resumed, forked or compacted conversation starts, reads its starting cost and context |
+| `classic.SessionStart` | When a cleared, resumed, forked or compacted conversation starts, reads its starting cost and context. A cleared or forked one starts its figures at zero; a resumed one gets its saved figures back |
 | `classic.PostModelSwitch` | After `/model`, starts the cache stopwatch again and notes how long the new cache lasts |
 | `session.measure` | Reads the context, rate limits and cost after each turn |
 | `tool.call` | After Edit or Write succeeds, counts the lines changed. After a Bash test command passes, adds XP. Always passes the call through unchanged |

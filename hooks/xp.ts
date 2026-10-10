@@ -167,6 +167,9 @@ const TEST_RUNNER = new RegExp(
 // Flags of a runner that lists, collects, compiles or explains tests: it succeeds without running any.
 const NOT_A_RUN = /^(--collect-only|--co|--list-tests|--listTests|-list|--list|--help|-h|--version|--dry-run|--no-run|--setup-plan|--setup-only|--collectOnly|--fixtures|--fixtures-per-test|--markers|--showConfig|--show-config|--init)(=.*)?$/
 
+// Runner options whose next word is a value, such as a test name or pattern: `-t`, `-k`, `--grep`, `-run`.
+const VALUED = /^(-t|-k|-m|-g|--grep|--testNamePattern|--testPathPattern|--test-name-pattern|-run|--filter)$/
+
 // Commands that may lead a runner without changing what its success means, with the options that take a value.
 const LEADERS: Record<string, { valued: string[]; then?: 'duration' }> = {
   time: { valued: [] },
@@ -209,7 +212,8 @@ function onlyLists(runner: string[]): boolean {
   const line = runner.join(' ')
   if (/^((npx|bunx)\s+)?(vitest|jest)\s+(list|bench|typecheck)(\s|$)/.test(line)) return true
   if (/^go\s+test(\s|$)/.test(line) && (runner.includes('-c') || /\s-run[\s=]\^?\$(\s|$)/.test(line))) return true
-  return runner.some(w => NOT_A_RUN.test(w))
+  // A word that is an option's value (`-t "--list"`, a test name) is not a flag.
+  return runner.some((w, i) => NOT_A_RUN.test(w) && !VALUED.test(runner[i - 1] ?? ''))
 }
 
 /**

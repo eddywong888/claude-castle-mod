@@ -1,7 +1,7 @@
 {
   "name": "castle-hud",
   "displayName": "Castle HUD",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "description": "Castlevania-style HUD above the Claude Code prompt: context blood meter, rate-limit moons, cache stopwatch, costs, subagent bats, a burning castle, and levels with achievements",
   "author": {
     "name": "Eddy Wong"

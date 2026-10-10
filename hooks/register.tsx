@@ -88,6 +88,8 @@ const CONV = 'conv:'
 const CONV_KEEP_MS = 30 * 86400e3
 type Conversation = { lines: Lines; lastTurn: LastTurn | null; cache: Cache | null; at: number }
 let convDirty = false
+// The conversation the figures belong to, set as it starts: they're saved under it even mid-switch.
+let convId: string | undefined
 // The level and achievements last shown, to toast what is new; null until the first profile is read.
 let known: { level: number; unlocked: Set<string> } | null = null
 
@@ -163,7 +165,11 @@ async function fiveHourReset($: EngineInterface, now: number): Promise<string | 
 /** Saves the 5-hour window's reset when a reading brings a later one. */
 async function noteReset($: EngineInterface, u: Usage) {
   const at = u.limits.find(l => l.kind === 'five_hour')?.resetsAt
-  if (!at || later(at, knownReset) !== at || at === knownReset) return
+  if (!at || at === knownReset) return
+  // Never move the saved reset back: a session's first reading may be older than another's latest.
+  const saved = await $.store.get(RESET_KEY)
+  knownReset = later(knownReset, typeof saved === 'string' ? saved : undefined)
+  if (later(at, knownReset) !== at || at === knownReset) return
   await $.store.set(RESET_KEY, at)
   knownReset = at
 }
@@ -248,16 +254,29 @@ function saveMine($: EngineInterface): Promise<void> {
 
 async function readArchive($: EngineInterface): Promise<Archive> {
   let a = (await $.store.get(ARCHIVE)) as Partial<Archive> | undefined
-  if (!a) {
-    // 0.7.2 and 0.7.3 kept it among the `xp:` keys: move it.
-    const old = (await $.store.get(OLD_ARCHIVE)) as Partial<Archive> | undefined
-    if (old) {
-      await $.store.set(ARCHIVE, old)
-      a = old
-    }
+  // 0.7.2 and 0.7.3 keep it among the `xp:` keys, and a window still running one may write it again: merge it in.
+  const old = (await $.store.get(OLD_ARCHIVE)) as Partial<Archive> | undefined
+  if (old) {
+    a = mergeArchives(a, old)
+    await $.store.set(ARCHIVE, a)
+    await $.store.delete(OLD_ARCHIVE)
+  } else if (!a) {
+    // Another session may have just moved it: look once more before taking the archive as empty.
+    a = (await $.store.get(ARCHIVE)) as Partial<Archive> | undefined
   }
-  if (a && (await $.store.keys()).includes(OLD_ARCHIVE)) await $.store.delete(OLD_ARCHIVE)
   return { total: a?.total ?? emptyStats(), folded: a?.folded ?? {} }
+}
+
+/**
+ * The archive with an older-format one merged in. Its total is added only when it folded records this one
+ * hasn't: a total already merged on an earlier pass, and copied again by an old window, isn't counted twice.
+ */
+function mergeArchives(a: Partial<Archive> | undefined, old: Partial<Archive>): Archive {
+  const total = a?.total ?? emptyStats()
+  const folded = { ...(a?.folded ?? {}) }
+  const oldFolded = old.folded ?? {}
+  const fresh = !a || Object.keys(oldFolded).length === 0 || Object.keys(oldFolded).some(k => !(k in folded))
+  return { total: fresh && old.total ? addStats(total, old.total) : total, folded: { ...oldFolded, ...folded } }
 }
 
 /** Moves this session on to a fresh record, keeping only what the saved one (now counted elsewhere) lacks. */
@@ -268,13 +287,18 @@ async function moveToNewRecord($: EngineInterface) {
   mine = lastSaved ? subStats(mine, lastSaved) : mine
   lastSaved = null
   lastSavedAt = 0
+  // The archive now counts what this record held: read it again rather than show a total without it.
+  othersAt = 0
   dirty = mine.xp > 0 || mine.turns > 0 || mine.lines > 0 || (mine.compacts ?? 0) > 0
 }
 
-/** When this record is already in the archive, carries on under a new key with only what was earned since. */
+/**
+ * When this record is already in the archive, carries on under a new key with only what was earned since. A
+ * record saved before but gone from the store was folded too, its entry in the archive's list since forgotten.
+ */
 async function leaveIfFolded($: EngineInterface) {
   const archive = await readArchive($)
-  if (XP_KEY in archive.folded) await moveToNewRecord($)
+  if (XP_KEY in archive.folded || (lastSaved && (await $.store.get(XP_KEY)) === undefined)) await moveToNewRecord($)
 }
 
 /**
@@ -286,7 +310,10 @@ async function foldMine($: EngineInterface) {
   const archive = await readArchive($)
   if (!(XP_KEY in archive.folded)) {
     const now = await $.clock.now()
-    await $.store.set(ARCHIVE, { total: addStats(archive.total, lastSaved), folded: { ...archive.folded, [XP_KEY]: now } })
+    const total = addStats(archive.total, lastSaved)
+    await $.store.set(ARCHIVE, { total, folded: { ...archive.folded, [XP_KEY]: now } })
+    // Show it at once: the next refresh's profile adds the archive from the cache, not from the store.
+    others.set(ARCHIVE, total)
   }
   await moveToNewRecord($)
 }
@@ -420,7 +447,7 @@ async function saveConversation($: EngineInterface) {
   convDirty = false
   try {
     const saved: Conversation = { lines: await read($, lines), lastTurn: await read($, lastTurn), cache: await read($, cache), at: await $.clock.now() }
-    await $.store.set(CONV + (await $.session.id()), saved)
+    await $.store.set(CONV + (convId ?? (await $.session.id())), saved)
   } catch (err) {
     convDirty = true // tried again on the next refresh
     throw err
@@ -429,13 +456,22 @@ async function saveConversation($: EngineInterface) {
 
 /** Puts back this conversation's figures as they were last saved: after a restart, or on /resume. */
 async function restoreConversation($: EngineInterface) {
-  // A hot reload keeps the figures it had, which are newer than any saved: leave them.
-  if ((await read($, lastTurn)) || (await read($, lines)).added + (await read($, lines)).removed > 0) return
-  const saved = (await $.store.get(CONV + (await $.session.id()))) as Partial<Conversation> | undefined
+  const held = await read($, cache)
+  // A hot reload keeps the figures it had, which are newer than any saved: leave them, and save them soon,
+  // since what changed just before the reload may not be saved yet.
+  const changed = await read($, lines)
+  if ((await read($, lastTurn)) || changed.added + changed.removed > 0) {
+    if (held?.ttlMs) cacheTtlMs = held.ttlMs
+    convDirty = true
+    return
+  }
+  const saved = (await $.store.get(CONV + (convId ?? (await $.session.id())))) as Partial<Conversation> | undefined
   if (!saved) return
   await update($, lines, () => saved.lines ?? { added: 0, removed: 0 })
   await update($, lastTurn, () => saved.lastTurn ?? null)
   await update($, cache, () => saved.cache ?? null)
+  // The cache's life, as a model switch last reported it.
+  if (saved.cache?.ttlMs) cacheTtlMs = saved.cache.ttlMs
 }
 
 /** Deletes saved conversations not touched for a month. */
@@ -457,14 +493,15 @@ async function refreshUsage($: EngineInterface) {
 }
 
 /** Reads this conversation's starting figures: on load, and after /clear, /resume or a fork. */
-async function startOver($: EngineInterface) {
+async function startOver($: EngineInterface, id?: string, restore = true) {
+  convId = id ?? (await $.session.id().catch(() => undefined))
   const now = await $.session.usage()
   const u = toUsage(now)
   await update($, usage, () => u)
   lastUsd = now.cost?.usd
   await update($, startedAt, () => now.startedAt)
   await noteReset($, u)
-  await restoreConversation($).catch(() => undefined)
+  if (restore) await restoreConversation($).catch(() => undefined)
 }
 
 export const register: Register = on => {
@@ -534,19 +571,20 @@ export const register: Register = on => {
     await saveMine($)
       .then(() => (dirty ? undefined : foldMine($)))
       .catch(() => undefined)
-    const result = await next(e)
-    // The new conversation's baseline is read when it starts (classic.SessionStart below), before any turn.
-    if (e.reason === 'clear' || e.reason === 'resume') await forgetConversation($)
-
-    return result
+    // The new conversation's figures are started over when it starts (classic.SessionStart below), before any turn.
+    return next(e)
   })
 
   // The moment a new or compacted conversation is in place: no turn can have run in it yet.
   on('classic.SessionStart', async ($, e, next) => {
     const result = await next(e)
-    // A fork may come without a session.end: start its figures over here as well.
-    if (e.source === 'fork') await forgetConversation($)
-    if (e.source === 'clear' || e.source === 'resume' || e.source === 'fork') await startOver($) // its cost baseline, before any spend
+    if (e.source === 'clear' || e.source === 'resume' || e.source === 'fork') {
+      // A fork may come without a session.end: save the conversation it leaves before starting over.
+      if (e.source === 'fork') await saveConversation($).catch(() => undefined)
+      await forgetConversation($)
+      // Its cost baseline, before any spend; a resumed conversation's own figures come back, a fork starts afresh.
+      await startOver($, e.session_id, e.source !== 'fork')
+    }
     if (e.source === 'compact') await refreshUsage($) // the compacted context, now installed
 
     return result
@@ -556,6 +594,8 @@ export const register: Register = on => {
   on('classic.PostModelSwitch', async ($, e, next) => {
     const result = await next(e)
     cacheTtlMs = e.cache_ttl === '5m' ? 5 * 60e3 : CACHE_TTL_MS
+    // A resume restores the conversation's own model: its cache, and the restored stopwatch, stand.
+    if (e.source === 'resume') return result
     await update($, cache, () => null)
     convDirty = true
 

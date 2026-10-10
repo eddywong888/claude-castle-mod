@@ -200,3 +200,57 @@ test('a conversation’s lines changed and last turn are saved, and restored aft
   expect((store.get('conv:s1') as { lines: unknown }).lines).toEqual({ added: 8, removed: 2 })
   expect((store.get('conv:s1') as { lastTurn: unknown }).lastTurn).toEqual({ ms: 9000, out: 4000 })
 })
+
+const band = async ($: { ui: { mount: (e: never) => Promise<{ drawn: () => Promise<unknown>; unmount: () => Promise<void> }> } }) => {
+  const ui = await $.ui.mount({ plugin: 'castle-hud', surface: 'desktop', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 12, bodyColumns: 120 } } as never)
+  const text = JSON.stringify(await ui.drawn())
+  await ui.unmount()
+  return text
+}
+
+test('XP stays on the band through /clear, folded or not', async ($, on) => {
+  const { clock } = world(on)
+  on('tool.call', () => ({ result: {} }) as never)
+  await $.session.start(start as never)
+  await $.tool.call({ tool: 'Bash', command: 'npm test' } as never)
+  await clock.advance(15_000)
+  expect(await band($ as never)).toContain('25 / ')
+  await $.session.end({ reason: 'clear', sessionId: 's1', resume: undefined } as never)
+  await $.classic.SessionStart({ source: 'clear', session_id: 's2' } as never)
+  await clock.advance(15_000)
+  expect(await band($ as never)).toContain('25 / ')
+})
+
+test('an older-format archive is merged in, and counted once', async ($, on) => {
+  const { clock, store } = world(on, {
+    'archive:xp': { total: rec(100, 0), folded: { 'xp:a': T0 } },
+    'xp:archive': { total: rec(40, 0), folded: { 'xp:b': T0 } },
+  })
+  await $.session.start(start as never)
+  expect(await xpTotal($ as never)).toBe(140)
+  // An old window writes its copy again, folding nothing new: it adds nothing.
+  store.set('xp:archive', { total: rec(140, 0), folded: { 'xp:a': T0, 'xp:b': T0 } })
+  await clock.advance(5 * 60e3 + 15_000)
+  expect(await xpTotal($ as never)).toBe(140)
+  expect(store.has('xp:archive')).toBe(false)
+})
+
+test('a fork saves the conversation it leaves and starts its own figures afresh', async ($, on) => {
+  const { clock, store } = world(on)
+  on('tool.call', () => ({ result: { structuredPatch: [{ lines: ['+a'] }] } }) as never)
+  await $.session.start(start as never)
+  await $.tool.call({ tool: 'Edit', file_path: '/x', old_string: '', new_string: 'a' } as never)
+  // No refresh between the edit and the fork: the fork itself saves it.
+  await $.classic.SessionStart({ source: 'fork', session_id: 's1' } as never)
+  expect((store.get('conv:s1') as { lines: unknown }).lines).toEqual({ added: 1, removed: 0 })
+  await $.tool.call({ tool: 'Edit', file_path: '/x', old_string: '', new_string: 'a' } as never)
+  await clock.advance(15_000)
+  expect((store.get('conv:s1') as { lines: unknown }).lines).toEqual({ added: 1, removed: 0 })
+})
+
+test('the saved 5-hour reset never moves back', async ($, on) => {
+  const { clock, store } = world(on, { 'reset:five_hour': '2026-10-09T14:00:00Z' })
+  await $.session.start(start as never)
+  await clock.advance(15_000)
+  expect(store.get('reset:five_hour')).toBe('2026-10-09T14:00:00Z')
+})
