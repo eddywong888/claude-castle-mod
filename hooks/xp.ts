@@ -152,29 +152,64 @@ export function profileOf(s: Stats, today: string): Profile {
   return { ...lv, xp: s.xp, streak, unlocked, castleTier: Math.min(5, 1 + (s.compacts ?? 0)) }
 }
 
-// A test runner at the start of a command: `npm test`, `npm t`, `pnpm run test`, `pytest`, `go test`, `npx vitest`,
-// `npx playwright test`. `make test` alone: `make test-lint` is some other target.
-const TEST_RUNNER = /^((npm|pnpm|yarn|bun)\s+(run\s+)?(test\b|t(\s|$))|(npx\s+|bunx\s+|python3?\s+-m\s+)?(pytest|jest|vitest|mocha|rspec|phpunit)\b|(npx\s+|bunx\s+)?playwright\s+test\b|(go|cargo|deno|mix|dotnet)\s+test\b|claude\s+plugin\s+test\b|make\s+test(\s|$))/
+// A test runner at the start of a command: `npm test`, `npm t`, `pnpm run test:unit`, `pytest`, `go test`,
+// `npx vitest`, `npx playwright test`. Each name ends at a space: `jest-codemods` and `pytest-watch` are other
+// tools, `make test-lint` another target, and `npm run test:lint` a lint, not a test run.
+const END = '(?=\\s|$)'
+const SCRIPT = `test(:(?!lint|types?|typecheck|format|style|prettier|eslint)[\\w:-]+)?${END}`
+const TEST_RUNNER = new RegExp(
+  `^((npm|pnpm|yarn|bun)\\s+(run\\s+)?(${SCRIPT}|t${END})` +
+    `|(npx\\s+|bunx\\s+|python3?\\s+-m\\s+)?(pytest|jest|vitest|mocha|rspec|phpunit)${END}` +
+    `|(npx\\s+|bunx\\s+)?playwright\\s+test${END}` +
+    `|(go|cargo|deno|mix|dotnet)\\s+test${END}|claude\\s+plugin\\s+test${END}|make\\s+test${END})`,
+)
 
-// What may lead a test runner without changing whether its success means the tests passed:
-// `time`, `env A=1`, `timeout 300`, `nice`, `uv run`, `poetry run`, `pipenv run`, and `VAR=value` assignments.
-const LEADER = /^(time\s+|nice\s+|env\s+|timeout\s+(-\S+\s+)*\d+[smhd]?\s+|(uv|poetry|pipenv|pdm|hatch)\s+run\s+|\w+=\S*\s+)/
+// Flags of a runner that lists, collects, compiles or explains tests: it succeeds without running any.
+const NOT_A_RUN = /^(--collect-only|--co|--list-tests|--listTests|-list|--list|--help|-h|--version|--dry-run|--no-run|--setup-plan|--setup-only|--collectOnly|--fixtures|--fixtures-per-test|--markers|--showConfig|--show-config|--init)(=.*)?$/
 
-// Runs that list, collect, compile or explain tests: they succeed without running any.
-const NOT_A_RUN = /(^|\s)(--collect-only|--co|--list-tests|--listTests|-list|--list|--help|-h|--version|--dry-run|--passWithNoTests|--no-run|--setup-plan|--setup-only|--collectOnly|--fixtures|--fixtures-per-test|--markers|--showConfig|--show-config)(\s|=|$)/
+// Commands that may lead a runner without changing what its success means, with the options that take a value.
+const LEADERS: Record<string, { valued: string[]; then?: 'duration' }> = {
+  time: { valued: [] },
+  nice: { valued: ['-n', '--adjustment'] },
+  env: { valued: ['-u', '--unset', '-C', '--chdir', '-S', '--split-string'] },
+  timeout: { valued: ['-s', '--signal', '-k', '--kill-after'], then: 'duration' },
+}
+// `uv run`, `poetry run` and the like run what follows in a project's environment.
+const RUNNERS_OF = /^(uv|poetry|pipenv|pdm|hatch|rye)$/
+const RUN_VALUED = ['--with', '--python', '-p', '--project', '--directory', '--env-file', '--extra', '--group', '--package']
 
-/** The runner with whatever leads it dropped: `env CI=1 time npm test` is `npm test`. */
-function runnerOf(part: string): string {
-  let p = part.trim()
-  for (let m = LEADER.exec(p); m; m = LEADER.exec(p)) p = p.slice(m[0].length)
-  return p
+/** The words of a runner with whatever leads it dropped: `env CI=1 timeout -s KILL 300 npm test` is `npm test`. */
+function runnerOf(words: string[]): string[] {
+  let i = 0
+  for (;;) {
+    const w = words[i]
+    if (w === undefined) return []
+    if (/^\w+=/.test(w)) {
+      i++ // VAR=value
+      continue
+    }
+    const leader = LEADERS[w]
+    if (leader) {
+      i++
+      while (words[i]?.startsWith('-')) i += leader.valued.includes(words[i] ?? '') ? 2 : 1
+      if (leader.then === 'duration' && /^\d+(\.\d+)?[smhd]?$/.test(words[i] ?? '')) i++
+      continue
+    }
+    if (RUNNERS_OF.test(w) && words[i + 1] === 'run') {
+      i += 2
+      while (words[i]?.startsWith('-')) i += RUN_VALUED.includes(words[i] ?? '') ? 2 : 1
+      continue
+    }
+    return words.slice(i)
+  }
 }
 
-/** A runner asked for something other than a run: `vitest list`, `jest list`, `go test -c`, `go test -run ^$`. */
-function onlyLists(runner: string): boolean {
-  if (/^(npx\s+|bunx\s+)?(vitest|jest)\s+list\b/.test(runner)) return true
-  if (/^go\s+test\b/.test(runner) && (/\s-c(\s|$)/.test(runner) || /\s-run[\s=]+\^?\$(\s|$)/.test(runner))) return true
-  return false
+/** A runner asked for something other than a run: `vitest list`, `vitest bench`, `go test -c`, `go test -run ^$`. */
+function onlyLists(runner: string[]): boolean {
+  const line = runner.join(' ')
+  if (/^((npx|bunx)\s+)?(vitest|jest)\s+(list|bench|typecheck)(\s|$)/.test(line)) return true
+  if (/^go\s+test(\s|$)/.test(line) && (runner.includes('-c') || /\s-run[\s=]\^?\$(\s|$)/.test(line))) return true
+  return runner.some(w => NOT_A_RUN.test(w))
 }
 
 /**
@@ -183,25 +218,24 @@ function onlyLists(runner: string): boolean {
  * (`||`, `;`, a pipe, a background `&`, a newline, a subshell) doesn't count.
  */
 export function isTestCommand(command: string): boolean {
-  // Quoted text is an argument, not a command: `echo "cd app && npm test"` runs no tests.
-  // `2>&1` and `&>/dev/null` only redirect output.
-  const plain = command.replace(/"[^"]*"|'[^']*'/g, 'Q').replace(/\d*>&\d+/g, '').replace(/&>>?\s*\S+/g, '')
-  if (/["']/.test(plain)) return false // an unbalanced quote: can't tell what runs
-  // Everything after an unquoted `#` is a comment: `echo ok # && npm test` runs no tests.
-  const code = plain.replace(/(^|\s)#.*$/gm, '$1')
-  if (/\|\||;|\||\n|`|\$\(|(^|[^&])&(?!&)/.test(code)) return false
-  // Runs that list, collect or explain tests succeed without running any. Checked on the command's real
-  // arguments: comments dropped, quotes removed, so `pytest "--collect-only"` is caught and
-  // `npm test # --help ...` isn't.
+  // Quoted text is one argument, never a command: `echo "cd app && npm test"` runs no tests. Mask each quote
+  // as a placeholder word, so the command's own structure is read without it.
   const quoted: string[] = []
   const masked = command.replace(/"[^"]*"|'[^']*'/g, m => `\u0000${quoted.push(m.slice(1, -1)) - 1}\u0000`)
-  const words = masked.replace(/(^|\s)#.*$/gm, '$1').replace(/\u0000(\d+)\u0000/g, (_, i: string) => ` ${quoted[Number(i)]} `)
-  if (NOT_A_RUN.test(words)) return false
-  // `^$` is masked as a quote when quoted: check the `-run` pattern on the real arguments too.
-  const runners = code.split('&&').map(runnerOf)
-  const realRunners = words.split('&&').map(runnerOf)
-  if (realRunners.some(onlyLists)) return false
-  return runners.some(part => TEST_RUNNER.test(part))
+  if (/["']/.test(masked)) return false // an unbalanced quote: can't tell what runs
+  // `2>&1` and `&>/dev/null` only redirect output; everything after an unquoted `#` is a comment.
+  const code = masked
+    .replace(/\d*>&\d+/g, '')
+    .replace(/&>>?\s*\S+/g, '')
+    .replace(/(^|\s)#.*$/gm, '$1')
+  if (/\|\||;|\||\n|`|\$\(|(^|[^&])&(?!&)/.test(code)) return false
+  const unmask = (w: string) => w.replace(/\u0000(\d+)\u0000/g, (_, i: string) => quoted[Number(i)] ?? '')
+  // The flags that mark a run as not running tests are read from the runner's own arguments: `ls -h && npm test`
+  // runs tests, and `npm test -- -t "the --list flag"` names a test.
+  return code.split('&&').some(part => {
+    const runner = runnerOf(part.trim().split(/\s+/).filter(Boolean).map(unmask))
+    return runner.length > 0 && TEST_RUNNER.test(runner.join(' ')) && !onlyLists(runner)
+  })
 }
 
 /** The `/castle` report: level, streak, what earned the XP, and every achievement. */

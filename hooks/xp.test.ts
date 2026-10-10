@@ -102,3 +102,10 @@ test('what a record gained since an earlier one', () => {
   const after = { ...emptyStats(), xp: 130, turns: 7, days: ['2026-10-08', '2026-10-09'], compacts: 2 }
   expect(subStats(after, before)).toEqual({ ...emptyStats(), xp: 30, turns: 2, days: ['2026-10-09'], compacts: 1 })
 })
+
+test('runner names end at a space, and the not-a-run flags are read from the runner alone', () => {
+  for (const c of ['npx jest-codemods .', 'jest-coverage-badges', 'pytest-watch', 'npx vitest-preview', 'npm run test:lint', 'npm run test:types', 'npx vitest bench', 'npx vitest typecheck', 'npx jest --init', 'pytest "--collect-only"'])
+    expect([c, isTestCommand(c)]).toEqual([c, false])
+  for (const c of ['ls -h && npm test', 'du -h . && npm test', 'git commit -m "fix --help text" && npm test', 'npm test -- -t "handles --list flag"', 'npx jest --passWithNoTests', 'timeout -s KILL 300 npm test', 'timeout -k 5 300 npm test', 'timeout 2.5 npm test', 'nice -n 10 npm test', 'env -i PATH=/bin npm test', 'env -u X npm test', 'time -p npm test', 'uv run --with pytest pytest', 'npm run test:unit'])
+    expect([c, isTestCommand(c)]).toEqual([c, true])
+})

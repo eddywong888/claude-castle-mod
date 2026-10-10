@@ -28,7 +28,7 @@ To update later, run:
 /reload-plugins
 ```
 
-If the HUD doesn't change after the reload, restart Claude Code.
+If the HUD doesn't change after the reload, restart Claude Code. Restart any other open windows too, so they all run the same version.
 
 ## What it shows
 
@@ -80,10 +80,10 @@ Type `/castle` to see your level, where your XP came from and every achievement.
 
 ## Good to know
 
-- **Cache life.** The stopwatch counts down one hour from each reply, the life of Claude Code's prompt cache. A reply counts as warm when it comes within that hour.
+- **Cache life.** The stopwatch counts down one hour from each reply, the life of Claude Code's prompt cache. A reply counts as warm when it comes within that hour. If you switch model and Claude Code reports a five-minute cache, it counts down five minutes instead. A compaction or a model switch starts the stopwatch again.
 - **The 5-hour total** counts only sessions running this mod, from when it was installed. Usage on claude.ai or in other tools isn't included.
 - **Lines changed** counts only Claude's Edit and Write tools. Files changed by shell commands such as `sed` or `git` aren't counted.
-- **XP and the 5-hour total** are kept in the mod's own storage on your machine, a file under `~/.claude/plugins/store/` whose name starts with `castle-hud_`. Nothing is sent anywhere. Sessions that ended more than two days ago are merged into one total, so the file stays small.
+- **XP and the 5-hour total** are kept in the mod's own storage on your machine, a file under `~/.claude/plugins/store/` whose name starts with `castle-hud_`. Nothing is sent anywhere. Each session's XP is added to one saved total when its conversation ends, so the file stays small.
 - **Where it shows.** The HUD draws in the desktop app's Code tab. It draws nothing in a terminal, so a status line you've set up there stays as it is, and Claude Code doesn't offer this band in VS Code. Levels, XP and `/castle` still work everywhere.
 
 ## What the hooks do
@@ -93,10 +93,11 @@ The mod only reads what Claude Code reports. It never blocks, changes or rewrite
 | Hook | What it does |
 |---|---|
 | `session.start` | Reads the session's usage, registers `/castle` and starts a 15-second refresh |
-| `session.end` | Saves your XP. After `/clear` or `/resume`, resets this conversation's figures |
-| `turn.start` | Notes when a turn starts and how full the context was, for the last-turn time and the cache check |
+| `session.end` | Saves your XP and adds it to the saved total. After `/clear` or `/resume`, resets this conversation's figures |
+| `turn.start` | Notes when a turn starts, to tell whether it found the cache warm |
 | `session.compact` | After a compaction finishes, raises the castle a tier and shows the smaller context. The compaction itself is unchanged |
 | `classic.SessionStart` | When a cleared, resumed, forked or compacted conversation starts, reads its starting cost and context |
+| `classic.PostModelSwitch` | After `/model`, starts the cache stopwatch again and notes how long the new cache lasts |
 | `session.measure` | Reads the context, rate limits and cost after each turn |
 | `tool.call` | After Edit or Write succeeds, counts the lines changed. After a Bash test command passes, adds XP. Always passes the call through unchanged |
 | `command.run` | Answers `/castle` with your level and achievements, and `/castle reset` |

@@ -89,12 +89,16 @@ test('session time', () => {
 test('the cache follows real cache activity and stays warm for an hour', () => {
   const u = (read: number, written: number) => ({ cache_read_input_tokens: read, cache_creation_input_tokens: written, input_tokens: 10 })
   const first = nextCache(null, u(0, 500), now)
-  expect(first).toEqual({ read: 0, written: 500, uncached: 10, at: now })
+  expect(first).toEqual({ read: 0, written: 500, uncached: 10, at: now, ttlMs: 60 * 60e3 })
   // A reply with no cache activity leaves the countdown alone.
   expect(nextCache(first, u(0, 0), now + 60e3)).toBe(first)
   expect(wasWarm(first, now + 59 * 60e3)).toBe(true)
   expect(wasWarm(first, now + 61 * 60e3)).toBe(false)
   expect(wasWarm(null, now)).toBe(false)
+  // A five-minute cache, as a model switch can report.
+  const short = nextCache(null, u(0, 500), now, 5 * 60e3)
+  expect(wasWarm(short, now + 4 * 60e3)).toBe(true)
+  expect(wasWarm(short, now + 30 * 60e3)).toBe(false)
 })
 
 test('castle burns as the context fills', () => {

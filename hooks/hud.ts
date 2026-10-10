@@ -138,23 +138,27 @@ export function linesOf(tool: string, input: Record<string, unknown>): { added: 
   return { added: 0, removed: 0 }
 }
 
-export type CacheState = { read: number; written: number; uncached: number; at: number }
+export type CacheState = { read: number; written: number; uncached: number; at: number; ttlMs?: number }
 
-/** The cache after a main-loop reply: its counts, and the time it warms for an hour from. A reply that neither read nor wrote it leaves it as it was. */
+/**
+ * The cache after a main-loop reply: its counts, the time it stays warm from, and for how long (an hour unless
+ * Claude Code reported otherwise). A reply that neither read nor wrote it leaves it as it was.
+ */
 export function nextCache(
   prev: CacheState | null,
   u: { cache_read_input_tokens: number; cache_creation_input_tokens: number; input_tokens: number },
   at: number,
+  ttlMs = CACHE_TTL_MS,
 ): CacheState | null {
   const read = u.cache_read_input_tokens
   const written = u.cache_creation_input_tokens
   if (read + written === 0) return prev
-  return { read, written, uncached: u.input_tokens, at }
+  return { read, written, uncached: u.input_tokens, at, ttlMs }
 }
 
-/** Whether a turn that started at `startedAt` found the cache warm: an earlier reply less than an hour before. */
+/** Whether a turn that started at `startedAt` found the cache warm: an earlier reply within the cache's life. */
 export function wasWarm(prev: CacheState | null, startedAt: number): boolean {
-  return !!prev?.at && startedAt - prev.at < CACHE_TTL_MS
+  return !!prev?.at && startedAt - prev.at < (prev.ttlMs ?? CACHE_TTL_MS)
 }
 
 /** Session length as hours and minutes: `1h 42m`, `7m`. */

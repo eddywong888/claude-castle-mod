@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage } from 'claude-code'
 
 import type { Usage } from '../types'
-import { editLines, legacyEntries, nextCache, spendKey, spendTime, spentSince, wasWarm, WINDOW_MS } from './hud'
+import { CACHE_TTL_MS, editLines, legacyEntries, nextCache, spendKey, spendTime, spentSince, wasWarm, WINDOW_MS } from './hud'
 import { buildSvg, castleSvg, NIGHT } from './svg'
 import { ACHIEVEMENTS, addStats, dayKey, emptyStats, isTestCommand, profileOf, report, subStats, turnXp, XP } from './xp'
 import type { Stats } from './xp'
@@ -61,9 +61,12 @@ let lastSaved: Stats | null = null
 let lastSavedAt = 0
 const TOUCH_EVERY_MS = 3600e3
 // Ended sessions' records are folded into one archive record, so the store doesn't grow a key per session forever.
-const ARCHIVE = 'xp:archive'
+// Each session folds its own record as it ends; a record left by a session that crashed is folded by others once
+// it has gone unsaved for a week. Outside the `xp:` keys, which versions before 0.7.2 read as session records.
+const ARCHIVE = 'archive:xp'
+const OLD_ARCHIVE = 'xp:archive'
 type Archive = { total: Stats; folded: Record<string, number> }
-const FOLD_AFTER_MS = 2 * 86400e3
+const FOLD_AFTER_MS = 7 * 86400e3
 const FORGET_FOLDED_MS = 30 * 86400e3
 // The level and achievements already toasted, shared by every session so each is toasted once, not once a window.
 const TOASTED = 'toasted'
@@ -77,6 +80,8 @@ const OTHERS_EVERY_MS = 5 * 60e3
 let turnLines = 0
 // When the main conversation's current turn started (turn.start fires for the main loop only).
 let turnStartedAt = 0
+// How long the prompt cache lasts: an hour, unless a model switch reports otherwise.
+let cacheTtlMs = CACHE_TTL_MS
 let dirty = false
 // The level and achievements last shown, to toast what is new; null until the first profile is read.
 let known: { level: number; unlocked: Set<string> } | null = null
@@ -136,28 +141,31 @@ function resum($: EngineInterface): Promise<void> {
   return summing
 }
 
-/** The 5-hour window's reset: from the latest reading, or the last one saved while there's none yet. */
-async function fiveHourReset($: EngineInterface): Promise<string | undefined> {
-  const now = (await read($, usage))?.limits.find(l => l.kind === 'five_hour')?.resetsAt
-  if (now) return now
-  if (knownReset === undefined) {
-    const saved = await $.store.get(RESET_KEY)
-    if (typeof saved === 'string') knownReset = saved
-  }
-  return knownReset
+const later = (a: string | undefined, b: string | undefined) => (!a ? b : !b ? a : Date.parse(a) >= Date.parse(b) ? a : b)
+
+/**
+ * The 5-hour window's reset: this session's reading while it's still ahead; once it has passed (an idle session)
+ * or before the first reading, the latest any session saved, which another session may have moved on.
+ */
+async function fiveHourReset($: EngineInterface, now: number): Promise<string | undefined> {
+  const own = (await read($, usage))?.limits.find(l => l.kind === 'five_hour')?.resetsAt
+  if (own && Date.parse(own) > now) return own
+  const saved = await $.store.get(RESET_KEY)
+  if (typeof saved === 'string') knownReset = later(knownReset, saved)
+  return later(own, knownReset)
 }
 
-/** Saves the 5-hour window's reset when a reading brings a new one. */
+/** Saves the 5-hour window's reset when a reading brings a later one. */
 async function noteReset($: EngineInterface, u: Usage) {
   const at = u.limits.find(l => l.kind === 'five_hour')?.resetsAt
-  if (!at || at === knownReset) return
+  if (!at || later(at, knownReset) !== at || at === knownReset) return
   await $.store.set(RESET_KEY, at)
   knownReset = at
 }
 
 async function sumSpend($: EngineInterface) {
   const t = await $.clock.now()
-  const spent = spentSince(await allSpend($, t), windowStart(await fiveHourReset($), t))
+  const spent = spentSince(await allSpend($, t), windowStart(await fiveHourReset($, t), t))
   if (Math.abs(spent - ((await read($, windowUsd)) ?? -1)) > 0.004) await update($, windowUsd, () => spent)
 }
 
@@ -221,8 +229,8 @@ function saveMine($: EngineInterface): Promise<void> {
     const now = await $.clock.now()
     // Unchanged records are saved again hourly, so others can tell an open session from an ended one.
     if (!dirty && (!lastSaved || now - lastSavedAt < TOUCH_EVERY_MS)) return
-    // Back after a long sleep: another session may have folded this record into the archive meanwhile.
-    if (lastSaved && now - lastSavedAt > FOLD_AFTER_MS / 4) await leaveIfFolded($)
+    // Another session may have folded this record into the archive (after a long sleep, say): never write over it.
+    if (lastSaved) await leaveIfFolded($)
     const snapshot = mine
     await $.store.set(XP_KEY, { ...snapshot, savedAt: now })
     lastSaved = snapshot
@@ -234,20 +242,48 @@ function saveMine($: EngineInterface): Promise<void> {
 }
 
 async function readArchive($: EngineInterface): Promise<Archive> {
-  const a = (await $.store.get(ARCHIVE)) as Partial<Archive> | undefined
+  let a = (await $.store.get(ARCHIVE)) as Partial<Archive> | undefined
+  if (!a) {
+    // 0.7.2 and 0.7.3 kept it among the `xp:` keys: move it.
+    const old = (await $.store.get(OLD_ARCHIVE)) as Partial<Archive> | undefined
+    if (old) {
+      await $.store.set(ARCHIVE, old)
+      a = old
+    }
+  }
+  if (a && (await $.store.keys()).includes(OLD_ARCHIVE)) await $.store.delete(OLD_ARCHIVE)
   return { total: a?.total ?? emptyStats(), folded: a?.folded ?? {} }
 }
 
-/** When this record is already in the archive, carries on under a new key with only what was earned since. */
-async function leaveIfFolded($: EngineInterface) {
-  const archive = await readArchive($)
-  if (!(XP_KEY in archive.folded)) return
+/** Moves this session on to a fresh record, keeping only what the saved one (now counted elsewhere) lacks. */
+async function moveToNewRecord($: EngineInterface) {
   const id = newId()
   await update($, xpId, () => id)
   XP_KEY = `xp:${id}`
   mine = lastSaved ? subStats(mine, lastSaved) : mine
   lastSaved = null
-  dirty = true
+  lastSavedAt = 0
+  dirty = mine.xp > 0 || mine.turns > 0 || mine.lines > 0 || (mine.compacts ?? 0) > 0
+}
+
+/** When this record is already in the archive, carries on under a new key with only what was earned since. */
+async function leaveIfFolded($: EngineInterface) {
+  const archive = await readArchive($)
+  if (XP_KEY in archive.folded) await moveToNewRecord($)
+}
+
+/**
+ * Folds this session's saved record into the archive as the conversation ends, then carries on under a new one.
+ * The old key is deleted by a later pass of any session, once the archive counting it is surely in the store.
+ */
+async function foldMine($: EngineInterface) {
+  if (!lastSaved) return
+  const archive = await readArchive($)
+  if (!(XP_KEY in archive.folded)) {
+    const now = await $.clock.now()
+    await $.store.set(ARCHIVE, { total: addStats(archive.total, lastSaved), folded: { ...archive.folded, [XP_KEY]: now } })
+  }
+  await moveToNewRecord($)
 }
 
 /**
@@ -261,12 +297,15 @@ async function readOthers($: EngineInterface, now: number): Promise<Map<string, 
   const present = new Set(keys)
   const out = new Map<string, Stats>()
   const fold: [string, Stats][] = []
+  // Folded while still open: carry on under a new record, so it isn't counted twice and then deleted.
+  if (XP_KEY in archive.folded) await moveToNewRecord($)
   for (const key of keys) {
-    if (!key.startsWith('xp:') || key === XP_KEY || key === ARCHIVE) continue
+    if (!key.startsWith('xp:') || key === XP_KEY || key === OLD_ARCHIVE) continue
     if (key in archive.folded) {
       await $.store.delete(key) // counted in the archive
       continue
     }
+    // Saved within the week: an open session's (they save hourly), or one that just ended and will fold itself.
     const s = (await $.store.get(key)) as Stats | undefined
     if (!s) continue
     if (now - (s.savedAt ?? 0) > FOLD_AFTER_MS) fold.push([key, s])
@@ -328,15 +367,28 @@ async function deriveProfile($: EngineInterface, everyone = false): Promise<Stat
   return all
 }
 
-/** Deletes everything the mod saved: every session's XP, the archive and the 5-hour spending. */
-async function resetAll($: EngineInterface) {
-  await saving.catch(() => undefined)
+/**
+ * Deletes everything the mod saved: every session's XP, the archive and the 5-hour spending. Runs in turn with
+ * the profile syncs and the saves, so none already under way writes an old record back afterwards.
+ */
+function resetAll($: EngineInterface): Promise<void> {
+  const run = syncing.catch(() => emptyStats()).then(async () => {
+    saving = saving.catch(() => undefined).then(() => wipe($))
+    await saving
+    return emptyStats()
+  })
+  syncing = run
+  return run.then(() => undefined)
+}
+
+async function wipe($: EngineInterface) {
   for (const key of await $.store.keys()) await $.store.delete(key)
   mine = emptyStats()
   lastSaved = null
   lastSavedAt = 0
   dirty = false
   others = new Map()
+  // Read everyone again on the next refresh, which finds the store empty.
   othersAt = 0
   known = null
   seenSpend.clear()
@@ -403,15 +455,25 @@ export const register: Register = on => {
     await attempt(() => $.store.delete('ledger')) // the shared list an earlier version kept
     // Keep one XP record per session across reloads: reuse the session's id and carry on from its saved record.
     await attempt(async () => {
-      const id = (await read($, xpId)) || myId
-      if (!(await read($, xpId))) await update($, xpId, () => id)
+      const kept = await read($, xpId)
+      const id = kept || myId
+      if (!kept) await update($, xpId, () => id)
       XP_KEY = `xp:${id}`
-      const saved = (await $.store.get(XP_KEY)) as Stats | undefined
-      if (saved) {
-        const { savedAt, ...stats } = saved
-        mine = stats
-        lastSaved = stats
-        lastSavedAt = savedAt ?? 0
+      try {
+        const saved = (await $.store.get(XP_KEY)) as Stats | undefined
+        const archive = await readArchive($)
+        // Already in the archive (folded as its conversation ended): its XP is counted there. Start a new record.
+        if (XP_KEY in archive.folded) await moveToNewRecord($)
+        else if (saved) {
+          const { savedAt, ...stats } = saved
+          mine = stats
+          lastSaved = stats
+          lastSavedAt = savedAt ?? 0
+        }
+      } catch (err) {
+        // The saved record couldn't be read: write to a new one rather than over it.
+        await moveToNewRecord($)
+        throw err
       }
     })
     await attempt(() => startOver($))
@@ -422,8 +484,11 @@ export const register: Register = on => {
 
   // /clear and /resume switch conversation without a new session.start: reset what belongs to the old one.
   on('session.end', async ($, e, next) => {
-    // Save first: the hooks share a short time limit at exit, and XP earned since the last refresh mustn't be lost.
-    await saveMine($).catch(() => undefined)
+    // Save and fold first: the hooks share a short time limit at exit, and XP earned since the last refresh
+    // mustn't be lost. The conversation is over, so its record goes into the archive.
+    await saveMine($)
+      .then(() => (dirty ? undefined : foldMine($)))
+      .catch(() => undefined)
     const result = await next(e)
     // The new conversation's baseline is read when it starts (classic.SessionStart below), before any turn.
     if (e.reason === 'clear' || e.reason === 'resume') await forgetConversation($)
@@ -438,6 +503,15 @@ export const register: Register = on => {
     if (e.source === 'fork') await forgetConversation($)
     if (e.source === 'clear' || e.source === 'resume' || e.source === 'fork') await startOver($) // its cost baseline, before any spend
     if (e.source === 'compact') await refreshUsage($) // the compacted context, now installed
+
+    return result
+  }).catch(($, e, next) => next(e))
+
+  // A model switch leaves the old model's cache behind, and says how long the cache lasts.
+  on('classic.PostModelSwitch', async ($, e, next) => {
+    const result = await next(e)
+    cacheTtlMs = e.cache_ttl === '5m' ? 5 * 60e3 : CACHE_TTL_MS
+    await update($, cache, () => null)
 
     return result
   }).catch(($, e, next) => next(e))
@@ -457,6 +531,8 @@ export const register: Register = on => {
           if (n >= 1 && n <= 4) $.ui.toast(`Castle rebuilt to tier ${n + 1} of 5`)
         })
         .catch(() => undefined)
+      // The conversation the cache held is gone: the next reply writes a new one.
+      await update($, cache, () => null)
       // The compacted size comes with the result: show it now, which also puts the fire out. The engine
       // installs the new conversation after this hook returns, so reading the session here would be too early.
       const u = await read($, usage)
@@ -511,7 +587,8 @@ export const register: Register = on => {
     const ran = await next(e)
     // Only a run that finished here counts: a background run has only started, its result unknown.
     const isBackground = e.run_in_background === true || (ran.result as { backgroundTaskId?: unknown } | undefined)?.backgroundTaskId !== undefined
-    if (ran.deny === undefined && ran.isError !== true && !isBackground && isTestCommand(e.command)) {
+    const interrupted = (ran.result as { interrupted?: unknown } | undefined)?.interrupted === true
+    if (ran.deny === undefined && ran.isError !== true && !interrupted && !isBackground && isTestCommand(e.command)) {
       mine = { ...mine, tests: mine.tests + 1, xp: mine.xp + XP.test }
       dirty = true
     }
@@ -520,7 +597,7 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e))
 
   on('command.run', { command: 'castle' }, async ($, e) => {
-    const arg = e.args.trim().toLowerCase()
+    const arg = e.args.trim().toLowerCase().split(/\s+/).join(' ')
     if (arg === 'reset')
       return {
         text: [
@@ -603,7 +680,7 @@ export const register: Register = on => {
       dirty = true
       void syncProfile($) // the turn doesn't wait for the profile
       const at = await $.clock.now()
-      const next2 = nextCache(prev?.at ? prev : null, u, at)
+      const next2 = nextCache(prev?.at ? prev : null, u, at, cacheTtlMs)
       if (next2 !== prev) await update($, cache, () => next2)
     }
 

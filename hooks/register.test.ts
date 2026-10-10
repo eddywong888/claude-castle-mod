@@ -43,7 +43,7 @@ function world(on: On, entries: Record<string, unknown> = {}) {
 
 const start = { cwd: '/', surface: 'desktop', isInteractive: true } as const
 const spendTotal = (store: Map<string, unknown>) => [...store].filter(([k]) => /^spend:\d+:/.test(k)).reduce((sum, [, v]) => sum + Number(v), 0)
-const xpRecord = (store: Map<string, unknown>) => [...store].find(([k]) => k.startsWith('xp:') && k !== 'xp:archive')?.[1] as Stats | undefined
+const xpRecord = (store: Map<string, unknown>) => [...store].find(([k]) => k.startsWith('xp:'))?.[1] as Stats | undefined
 const measure = (usd: number) => ({ context: { tokens: 1000, window: 200_000, percent: 1 }, rateLimits: [{ kind: 'five_hour', percentUsed: 1, resetsAt: RESET }], cost: { usd }, changed: ['cost'] }) as never
 
 test('spend after /clear counts from the new conversation’s own baseline', async ($, on) => {
@@ -109,13 +109,13 @@ test('an interrupted turn keeps its lines without earning XP for them later', as
   expect(r?.xp ?? 0).toBe(0)
 })
 
-test('records of sessions that ended days ago fold into one archive', async ($, on) => {
-  const old = { xp: 100, turns: 3, lines: 0, tests: 0, bats: 0, warm: 0, tidy: 0, night: 0, days: ['2026-10-01'], compacts: 1, savedAt: T0 - 5 * 86400e3 }
+test('records left unsaved for a week fold into one archive', async ($, on) => {
+  const old = { xp: 100, turns: 3, lines: 0, tests: 0, bats: 0, warm: 0, tidy: 0, night: 0, days: ['2026-10-01'], compacts: 1, savedAt: T0 - 10 * 86400e3 }
   const live = { ...old, xp: 7, days: ['2026-10-09'], compacts: 0, savedAt: T0 - 60e3 }
   const { clock, store } = world(on, { 'xp:gone1': old, 'xp:gone2': { ...old, savedAt: undefined }, 'xp:open': live })
   await $.session.start(start as never)
-  expect(store.has('xp:archive')).toBe(true)
-  expect((store.get('xp:archive') as { total: Stats }).total.xp).toBe(200)
+  expect(store.has('archive:xp')).toBe(true)
+  expect((store.get('archive:xp') as { total: Stats }).total.xp).toBe(200)
   expect(store.has('xp:open')).toBe(true)
   // A later pass deletes what the archive now counts.
   await clock.advance(5 * 60e3 + 15_000)
@@ -132,5 +132,55 @@ test('/castle reset asks first, then deletes everything saved', async ($, on) =>
   expect(ask.text).toContain('/castle reset confirm')
   expect(store.has('xp:someone')).toBe(true)
   await $.command.run({ command: 'castle', args: 'reset confirm' } as never)
+  expect(store.size).toBe(0)
+})
+
+const rec = (xp: number, savedAt: number) => ({ xp, turns: 1, lines: 0, tests: 0, bats: 0, warm: 0, tidy: 0, night: 0, days: [], compacts: 0, savedAt })
+const xpTotal = async ($: { command: { run: (e: never) => Promise<unknown> } }) => Number(/(\d+) XP in all/.exec(((await $.command.run({ command: 'castle', args: '' } as never)) as { text: string }).text)?.[1])
+
+test('a session folds its own record into the archive as its conversation ends', async ($, on) => {
+  const { clock, store } = world(on)
+  on('tool.call', () => ({ result: {} }) as never)
+  await $.session.start(start as never)
+  await $.tool.call({ tool: 'Bash', command: 'npm test' } as never)
+  await clock.advance(15_000)
+  const key = [...store.keys()].find(k => k.startsWith('xp:'))!
+  await $.session.end({ reason: 'clear', sessionId: 'a', resume: undefined } as never)
+  const archive = store.get('archive:xp') as { total: Stats; folded: Record<string, number> }
+  expect(archive.total.xp).toBe(25)
+  expect(key in archive.folded).toBe(true)
+  // Counted once, by the archive, from now on.
+  expect(await xpTotal($ as never)).toBe(25)
+  expect(store.has(key)).toBe(false)
+})
+
+test('a record folded while its session is still open moves on and is counted once', async ($, on) => {
+  const { clock, store } = world(on)
+  on('tool.call', () => ({ result: {} }) as never)
+  await $.session.start(start as never)
+  await $.tool.call({ tool: 'Bash', command: 'npm test' } as never)
+  await clock.advance(15_000)
+  const key = [...store.keys()].find(k => k.startsWith('xp:'))!
+  // Another session folds it, as if this one had gone quiet.
+  store.set('archive:xp', { total: { ...rec(25, 0), turns: 0 }, folded: { [key]: T0 } })
+  await $.tool.call({ tool: 'Bash', command: 'npm test' } as never)
+  expect(await xpTotal($ as never)).toBe(50)
+  await clock.advance(3 * 3600e3)
+  expect(await xpTotal($ as never)).toBe(50)
+})
+
+test('the archive moves out of the xp: keys older versions read as records', async ($, on) => {
+  const { clock, store } = world(on, { 'xp:archive': { total: rec(40, 0), folded: {} } })
+  await $.session.start(start as never)
+  await clock.advance(15_000)
+  expect(store.has('xp:archive')).toBe(false)
+  expect((store.get('archive:xp') as { total: Stats }).total.xp).toBe(40)
+  expect(await xpTotal($ as never)).toBe(40)
+})
+
+test('/castle reset  confirm works with extra spaces', async ($, on) => {
+  const { store } = world(on, { 'xp:someone': rec(50, T0) })
+  await $.session.start(start as never)
+  await $.command.run({ command: 'castle', args: ' reset   confirm ' } as never)
   expect(store.size).toBe(0)
 })

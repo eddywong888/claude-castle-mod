@@ -151,7 +151,7 @@ ${light > 0.01 ? litMoon(15, 31, 14.5, light) : ''}
   // Cache: the stopwatch, counting down to when the prompt cache goes cold.
   {
     const cache = h.cache?.at ? h.cache : null
-    const ttl = CACHE_TTL_MS
+    const ttl = cache?.ttlMs ?? CACHE_TTL_MS
     const left = cache ? cache.at + ttl - h.now : 0
     const warm = left > 0
     const mins = Math.min(ttl / 60000, Math.ceil(left / 60000))
