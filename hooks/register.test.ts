@@ -414,7 +414,7 @@ test('the bell tolls when a reply is done, and /castle sound off silences it', a
   expect(played.length).toBe(1)
 })
 
-test('a bat flies beside the level while Claude works', async ($, on) => {
+test('a cross is thrown beside the level while Claude works', async ($, on) => {
   const { clock } = world(on)
   on('tool.call', () => ({ result: {} }) as never)
   await $.session.start(start as never)

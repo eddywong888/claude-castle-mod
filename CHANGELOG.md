@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.1
+
+- The working indicator beside the level is now a thrown cross that spins out along its track and back, so it can't be mistaken for the subagent bats.
+
 ## 0.11.0
 
 - A bell tolls under a short organ chord when Claude finishes a reply: an original sound. `/castle sound off` silences it, `/castle sound on` brings it back.

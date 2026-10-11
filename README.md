@@ -43,7 +43,7 @@ If the HUD doesn't change after the reload, restart Claude Code. Restart any oth
 | <img src="screenshots/icons/dagger.svg" height="22" alt=""> | **Dagger** | How long the last reply took and how many tokens it wrote. |
 | <img src="screenshots/icons/scroll.svg" height="22" alt=""> | **Scroll** | Lines added and removed by Claude's Edit and Write tools in this conversation. |
 | <img src="screenshots/icons/bat.svg" height="22" alt=""> | **Bats** | One flapping bat per subagent running now. |
-| <img src="screenshots/icons/bat.svg" height="22" alt=""> | **Working bat** | Beside the level, a bat flies along a track while Claude works, and rests when it's your turn. |
+| <img src="screenshots/icons/cross.svg" height="22" alt=""> | **Thrown cross** | Beside the level, a cross spins out along a track and back while Claude works, and rests when it's your turn. |
 | <img src="screenshots/icons/crest.svg" height="22" alt=""> | **Title icon** | Your level, title, XP toward the next level and your daily streak. The icon changes with your title. |
 
 ### The castle burns as the cache runs down
