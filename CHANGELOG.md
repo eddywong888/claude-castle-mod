@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.9
+
+- The cache setting reaches every open window within a refresh, and a conversation restored after a restart or `/resume` counts down with it.
+- `/castle cache` with anything other than `5m` or `1h` explains the options instead of showing the level report.
+- PRIVACY.md, the README and the `/castle reset` prompt say that a reset keeps your bell and cache settings.
+
 ## 0.11.8
 
 - The gargoyle on the keep spreads its wings wide, as if about to take off.

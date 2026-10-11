@@ -482,3 +482,26 @@ test('/castle cache 5m sets the stopwatch, keeps it across sessions and through 
   await $.command.run({ command: 'castle', args: 'reset confirm' } as never)
   expect(store.get('cache:ttl')).toBe('5m')
 })
+
+test('the cache setting reaches a window that is already open, and odd /castle cache input gets help', async ($, on) => {
+  const { clock, store } = world(on)
+  await $.session.start(start as never)
+  await $.turn.start({ text: 'hi', turnId: 't1' } as never)
+  const usage = { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 500, model: 'm' }
+  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer', usage } as never)
+  store.set('cache:ttl', '5m') // another window's /castle cache 5m
+  await clock.advance(4 * 60e3 + 15_000)
+  expect(await band($ as never)).toContain('on fire')
+  const help = (await $.command.run({ command: 'castle', args: 'cache 5min' } as never)) as { text: string }
+  expect(help.text).toContain('/castle cache 5m')
+})
+
+test('a conversation restored after a restart counts down with the cache setting', async ($, on) => {
+  const { clock } = world(on, {
+    'cache:ttl': '5m',
+    'conv:s1': { lines: { added: 1, removed: 0 }, lastTurn: { ms: 1, out: 1 }, cache: { read: 1, written: 1, uncached: 1, at: T0 - 10 * 60e3, ttlMs: 3600e3 }, at: T0 },
+  })
+  await $.session.start(start as never)
+  await clock.advance(15_000)
+  expect(await band($ as never)).toContain('cache expired')
+})

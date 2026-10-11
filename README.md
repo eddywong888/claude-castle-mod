@@ -83,7 +83,7 @@ When Claude finishes a reply, a deep bell tolls under a short organ chord (an or
 
 Type `/castle cache 5m` if your prompt cache lasts five minutes (see *Cache life* below).
 
-Type `/castle` to see your level, where your XP came from and every achievement. Type `/castle reset` to start again from level 1: it asks you to confirm, then deletes everything the mod saved.
+Type `/castle` to see your level, where your XP came from and every achievement. Type `/castle reset` to start again from level 1: it asks you to confirm, then deletes everything the mod recorded. Your bell and cache settings stay; to remove those too, delete the mod's file under `~/.claude/plugins/store/` (see PRIVACY.md).
 
 ## Good to know
 

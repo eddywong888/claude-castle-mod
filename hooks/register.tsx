@@ -497,13 +497,24 @@ async function restoreConversation($: EngineInterface) {
   if (!saved) return
   await update($, lines, () => saved.lines ?? { added: 0, removed: 0 })
   await update($, lastTurn, () => saved.lastTurn ?? null)
-  await update($, cache, () => saved.cache ?? null)
+  // The cache's life is your setting's, whatever it was when this conversation was saved.
+  await update($, cache, () => (saved.cache ? { ...saved.cache, ttlMs: cacheTtlMs } : null))
 }
 
 /** Sets how long the cache lasts, from now on and for the cache already counting down. */
 async function setCacheTtl($: EngineInterface, ttl: '5m' | '1h') {
-  cacheTtlMs = ttlOf(ttl) ?? CACHE_TTL_MS
   await $.store.set(CACHE_TTL_KEY, ttl)
+  await applyCacheTtl($, ttlOf(ttl) ?? CACHE_TTL_MS)
+}
+
+/** Follows the saved cache setting, which another window may have changed: read at each refresh and reply. */
+async function followCacheTtl($: EngineInterface) {
+  const ttl = ttlOf(await $.store.get(CACHE_TTL_KEY))
+  if (ttl && ttl !== cacheTtlMs) await applyCacheTtl($, ttl)
+}
+
+async function applyCacheTtl($: EngineInterface, ttl: number) {
+  cacheTtlMs = ttl
   const c = await read($, cache)
   if (c?.at && c.ttlMs !== cacheTtlMs) {
     const ttlMs = cacheTtlMs
@@ -612,6 +623,7 @@ export const register: Register = on => {
       // Re-sum the window each refresh, so it drops back to $0 after a reset even when idle.
       await attempt(() => resum($))
       await attempt(() => syncProfile($))
+      await attempt(() => followCacheTtl($))
       await attempt(() => saveConversation($))
     }
     // The timer first: if anything below fails, the band still keeps time.
@@ -641,11 +653,9 @@ export const register: Register = on => {
         throw err
       }
     })
+    // The cache setting first, so a conversation restored below counts down with it.
+    await attempt(() => followCacheTtl($))
     await attempt(() => startOver($))
-    await attempt(async () => {
-      const ttl = ttlOf(await $.store.get(CACHE_TTL_KEY))
-      if (ttl) cacheTtlMs = ttl
-    })
     await attempt(() => pruneConversations($))
     await refresh()
 
@@ -783,12 +793,16 @@ export const register: Register = on => {
       await setCacheTtl($, arg === 'cache 5m' ? '5m' : '1h')
       return { text: `The cache stopwatch now counts down ${arg === 'cache 5m' ? 'five minutes' : 'an hour'} from each reply.` }
     }
-    if (arg === 'cache') return { text: `The cache stopwatch counts down ${cacheTtlMs === CACHE_TTL_MS ? 'an hour' : 'five minutes'}. Type /castle cache 5m or /castle cache 1h to change it.` }
+    if (arg === 'cache' || arg.startsWith('cache ')) {
+      await followCacheTtl($).catch(() => undefined)
+      const now = `The cache stopwatch counts down ${cacheTtlMs === CACHE_TTL_MS ? 'an hour' : 'five minutes'}.`
+      return { text: arg === 'cache' ? `${now} Type /castle cache 5m or /castle cache 1h to change it.` : `Use /castle cache 5m or /castle cache 1h. ${now}` }
+    }
     if (arg === 'sound') return { text: `The bell is ${(await soundIsOn($)) ? 'on' : 'off'}. Type /castle sound on or /castle sound off.` }
     if (arg === 'reset')
       return {
         text: [
-          'This deletes everything castle-hud saved: your XP, level, streak, achievements, compaction count and the 5-hour spending.',
+          'This deletes everything castle-hud recorded: your XP, level, streak, achievements, compaction count, the 5-hour spending and each conversation\'s figures. Your bell and cache settings stay.',
           'Close your other Claude Code sessions first, or they save their own XP again.',
           'To go ahead, type: /castle reset confirm',
         ].join('\n'),
@@ -871,6 +885,7 @@ export const register: Register = on => {
       dirty = true
       void syncProfile($) // the turn doesn't wait for the profile
       const at = await $.clock.now()
+      await followCacheTtl($).catch(() => undefined)
       const next2 = nextCache(prev?.at ? prev : null, u, at, cacheTtlMs)
       if (next2 !== prev) await update($, cache, () => next2)
     }
