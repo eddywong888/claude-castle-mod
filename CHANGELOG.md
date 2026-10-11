@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.3
+
+- The working bar is as long as its caption, with space between them, and the thrown cross trails a fading shadow tail.
+
 ## 0.11.2
 
 - The bell rings only in the desktop app: not in a terminal, a headless `claude -p` run or an SDK session.

@@ -183,5 +183,5 @@ test('every title has its own icon in the level section', () => {
 test('the working cross shows without a profile, and lands at the end of its track', () => {
   const svg = buildSvg({ usage: null, cache: null, bats: 0, now, prevPercent: 0, mode: 'dark', working: true })
   expect(svg.alt).toContain('Claude is working')
-  expect(svg.source).toContain('translateX(77.8px)') // 96 minus the 18.2 the cross is wide
+  expect(svg.source).toContain('translateX(131.8px)') // 150 minus the 18.2 the cross is wide
 })

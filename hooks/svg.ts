@@ -66,7 +66,8 @@ const BAT_DOWN = ['....XX....', '..XXXXXX..', 'XXXXXXXXXX', 'X..XXXX..X', '....X
 const CROSS_A = ['...X...', '..XSX..', 'XXXSXXX', 'XSSSSSX', 'XXXSXXX', '..XSX..', '...X...']
 const CROSS_B = ['XX...XX', 'XSX.XSX', '.XSXSX.', '..XSX..', '.XSXSX.', 'XSX.XSX', 'XX...XX']
 const CROSS_PX = 2.6
-const TRACK = 96
+// As long as its caption: the caption is fitted to this width, so bar and words line up end to end.
+const TRACK = 150
 const THROW = TRACK - (CROSS_A[0]?.length ?? 0) * CROSS_PX
 
 export const zone = (p: number) => (p >= 85 ? 'blood' : p >= 60 ? 'gold' : 'ink')
@@ -306,13 +307,18 @@ ${sprite(BAG, { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', T
     const track = TRACK
     const working = h.working === true
     const fill = working ? { X: 'var(--goldDark)', S: '#e6e1ec' } : { X: 'var(--track)', S: 'var(--stone)' }
+    const Y = 6
+    // A shadow tail: two fainter crosses following the thrown one a moment behind.
+    const ghost = (delay: number, opacity: number) =>
+      `<g class="throw" style="animation-delay:${delay}s" opacity="${opacity}">${sprite(CROSS_A, { X: 'var(--goldDark)', S: 'var(--gold)' }, 0, Y, CROSS_PX)}</g>`
     const cross = working
-      ? `<g class="throw"><g class="spinA">${sprite(CROSS_A, fill, 0, 12, CROSS_PX)}</g><g class="spinB">${sprite(CROSS_B, fill, 0, 12, CROSS_PX)}</g></g>`
-      : sprite(CROSS_A, fill, 0, 12, CROSS_PX)
+      ? ghost(0.14, 0.18) + ghost(0.07, 0.38) + `<g class="throw"><g class="spinA">${sprite(CROSS_A, fill, 0, Y, CROSS_PX)}</g><g class="spinB">${sprite(CROSS_B, fill, 0, Y, CROSS_PX)}</g></g>`
+      : sprite(CROSS_A, fill, 0, Y, CROSS_PX)
     const caption = working ? 'Claude is working' : 'waiting for you'
     sections.push({
-      width: Math.max(track, caption.length * CAPTION_W),
-      body: x => `<g transform="translate(${x} 0)"><rect x="0" y="34" width="${track}" height="3" fill="var(--track)"/>${working ? `<rect class="trail" x="0" y="34" width="${track}" height="3" fill="var(--gold)"/>` : ''}${cross}<text x="0" y="50" class="c">${caption}</text></g>`,
+      width: track,
+      // The bar sits clear above its caption, and the caption is spread to the bar's exact length.
+      body: x => `<g transform="translate(${x} 0)"><rect x="0" y="29" width="${track}" height="3" fill="var(--track)"/>${working ? `<rect class="trail" x="0" y="29" width="${track}" height="3" fill="var(--gold)"/>` : ''}${cross}<text x="0" y="52" class="c" textLength="${track}" lengthAdjust="spacing">${caption}</text></g>`,
     })
     alt.push(working ? 'Claude is working' : 'Waiting for you')
   }
