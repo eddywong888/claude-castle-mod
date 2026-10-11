@@ -342,3 +342,23 @@ test('a subscription shows its moons and hides the costs', async ($, on) => {
   expect(sub).toContain('5h limit')
   expect(sub).not.toContain('Session cost')
 })
+
+test('the castle catches fire as the cache runs down, and goes out when it expires', async ($, on) => {
+  const { clock } = world(on)
+  await $.session.start(start as never)
+  await $.turn.start({ text: 'hi', turnId: 't1' } as never)
+  const usage = { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 500, model: 'm' }
+  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer', usage } as never)
+  await clock.advance(20 * 60e3)
+  expect(await band($ as never)).not.toContain('on fire')
+  await clock.advance(10 * 60e3) // 30 minutes left: 50%
+  expect(await band($ as never)).not.toContain('on fire')
+  await clock.advance(10 * 60e3) // 20 minutes left: 33%
+  expect(await band($ as never)).toContain('on fire (small)')
+  await clock.advance(10 * 60e3) // 10 minutes left: 17%
+  expect(await band($ as never)).toContain('on fire (medium)')
+  await clock.advance(5 * 60e3) // 5 minutes left: 8%
+  expect(await band($ as never)).toContain('on fire (big)')
+  await clock.advance(6 * 60e3)
+  expect(await band($ as never)).not.toContain('on fire')
+})

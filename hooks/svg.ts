@@ -324,9 +324,18 @@ const FLAMES: Record<'small' | 'medium' | 'big', string[]> = {
 }
 const FIRE = { Y: '#ffd84a', O: '#ff8a1f', R: '#d8261c' }
 
-/** How much of the castle burns: none under 70% context, then small, medium and big fires. */
-export function fireLevel(percent: number): 'none' | 'small' | 'medium' | 'big' {
-  return percent >= 90 ? 'big' : percent >= 80 ? 'medium' : percent >= 70 ? 'small' : 'none'
+/**
+ * How much of the castle burns, from the share of the prompt cache's life left (0 to 1; null with no warm cache):
+ * a small fire at 40% left, a medium one at 20%, a big one at 10%. Reply before it burns down.
+ */
+export function fireLevel(cacheLeft: number | null): 'none' | 'small' | 'medium' | 'big' {
+  if (cacheLeft === null || cacheLeft <= 0) return 'none'
+  return cacheLeft <= 0.1 ? 'big' : cacheLeft <= 0.2 ? 'medium' : cacheLeft <= 0.4 ? 'small' : 'none'
+}
+
+/** The castle's tier from the context: 1 below 40%, then 2 at 40%, 3 at 60% and 4 at 80%. */
+export function tierFor(percent: number): number {
+  return percent >= 80 ? 4 : percent >= 60 ? 3 : percent >= 40 ? 2 : 1
 }
 
 /** A flickering flame, its base centered at (cx, baseY): two frames, the second mirrored. */
@@ -340,23 +349,23 @@ function flame(size: 'small' | 'medium' | 'big', cx: number, baseY: number, dela
   return `<g class="fa" ${style}>${sprite(rows, FIRE, x, y, px)}</g><g class="fb" ${style}>${sprite(mirrored, FIRE, x, y, px)}</g>`
 }
 
-/** The castle's tiers: each compaction raises it one, up to five. */
-export const MAX_TIER = 5
+/** The castle's tiers, one per stage of the context. */
+export const MAX_TIER = 4
 
 /**
  * The castle on the right edge of the band: three towers and the keep, lit windows, a few stars. It grows
- * bolder with its tier (banners at 2; more lit windows and a gold trim at 3; a taller main spire at 4; a gold
- * crest, brighter stone and a soft glow at 5) and burns as the context fills.
+ * bolder as the context fills (banners at 40%; more lit windows, a gold trim and a taller main spire at 60%; a
+ * gold crest, brighter stone and a soft glow at 80%) and burns as the prompt cache runs down.
  */
-export function castleSvg(percent = 0, tier = 4): { source: string; alt: string; width: number; height: number } {
+export function castleSvg(percent = 0, cacheLeft: number | null = null): { source: string; alt: string; width: number; height: number } {
   const DY = 20 // room above the towers for the flames
-  const t = Math.max(1, Math.min(MAX_TIER, Math.round(tier)))
+  const t = tierFor(percent)
   const has = (from: number) => t >= from
   // The tier each embellishment appears at.
   const BANNERS = 2
   const TRIM = 3
-  const SPIRE = 4
-  const CREST = 5
+  const SPIRE = 3
+  const CREST = 4
   const stone = has(CREST) ? '#4a3a63' : '#3d2f52'
   const mainTip = has(SPIRE) ? -6 : 0
   const towers: [number, number, number, number][] = [
@@ -384,9 +393,9 @@ export function castleSvg(percent = 0, tier = 4): { source: string; alt: string;
   const trim = has(TRIM) ? `<rect x="0" y="38" width="240" height="1" fill="#d4a017" opacity=".55"/>` : ''
   const crest = has(CREST) ? `<polygon points="96,${mainTip - 8} 99,${mainTip - 4} 96,${mainTip} 93,${mainTip - 4}" fill="#d4a017"/><rect x="95" y="${mainTip - 6}" width="2" height="4" fill="#fff3c4"/>` : ''
 
-  const fire = fireLevel(percent)
-  // The windows turn from candle-gold to red once half the context is used, before any fire.
-  const lit = percent >= 50 ? '#e0475b' : '#e3b341'
+  const fire = fireLevel(cacheLeft)
+  // The windows glow red while the castle burns, candle-gold otherwise.
+  const lit = fire !== 'none' ? '#e0475b' : '#e3b341'
   const windows =
     `<rect x="94" y="22" width="3" height="5" fill="${lit}"/>` +
     `<rect x="40" y="32" width="2" height="4" fill="${lit}" opacity=".55"/>` +
@@ -395,10 +404,10 @@ export function castleSvg(percent = 0, tier = 4): { source: string; alt: string;
 
   // Flames sit on the spire tips; lower down, fire breaks out of the windows and along the wall.
   const main = 86 + 10
-  const left = 34 + 7
+  const leftTower = 34 + 7
   const right = 146 + 7
   const roof = mainTip + 2
-  const side = (size: 'small' | 'medium' | 'big', delay: number) => flame(size, left, 14, delay) + flame(size, right, 12, delay + 0.1)
+  const side = (size: 'small' | 'medium' | 'big', delay: number) => flame(size, leftTower, 14, delay) + flame(size, right, 12, delay + 0.1)
   const windowFire = (delay: number) => flame('small', 95, 27, delay) + flame('small', 41, 36, delay + 0.07) + flame('small', 152, 34, delay + 0.13)
   const flames =
     fire === 'small' ? flame('small', main, roof, 0) + flame('small', 95, 27, 0.1)
@@ -414,7 +423,8 @@ export function castleSvg(percent = 0, tier = 4): { source: string; alt: string;
   const style = `<style>.fa{animation:fa .3s steps(1) infinite}.fb{opacity:0;animation:fb .3s steps(1) infinite}@keyframes fa{0%,49.9%{opacity:1}50%,100%{opacity:0}}@keyframes fb{0%,49.9%{opacity:0}50%,100%{opacity:1}}@media (prefers-reduced-motion:reduce){.fa{animation:none}.fb{animation:none;opacity:0}}rect{shape-rendering:crispEdges}</style>`
   const H = 60 + DY
   const source = `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(240 * CASTLE_SCALE)}" height="${Math.round(H * CASTLE_SCALE)}" viewBox="0 0 240 ${H}">${style}${glow}${stars}<g transform="translate(0 ${DY + 8})"><g fill="${stone}" shape-rendering="crispEdges">${wall}${shapes}</g>${trim}${banners}${crest}${windows}${flames}</g></svg>`
-  const alt = `Castle, tier ${t} of ${MAX_TIER}` + (fire === 'none' ? '' : `, on fire (${fire}): context at ${percent}%`)
+  const left = cacheLeft === null ? 0 : Math.round(cacheLeft * 100)
+  const alt = `Castle, tier ${t} of ${MAX_TIER} at ${percent}% context` + (fire === 'none' ? '' : `, on fire (${fire}): ${left}% of the cache left`)
 
   return { source, alt, width: Math.round(240 * CASTLE_SCALE), height: Math.round(H * CASTLE_SCALE) }
 }

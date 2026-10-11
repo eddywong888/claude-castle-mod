@@ -45,17 +45,17 @@ If the HUD doesn't change after the reload, restart Claude Code. Restart any oth
 | <img src="screenshots/icons/bat.svg" height="22" alt=""> | **Bats** | One flapping bat per subagent running now. |
 | <img src="screenshots/icons/crest.svg" height="22" alt=""> | **Crest** | Your level, title, XP toward the next level and your daily streak. |
 
-### The castle burns
+### The castle burns as the cache runs down
 
-As the context fills, the castle reacts: its windows turn from gold to red at 50%, a small fire starts at 70%, a bigger one at 80%, and the whole castle is ablaze with a red glow at 90%. That's your cue to wrap up or start a fresh session before Claude Code compacts the conversation.
+The fire follows the prompt cache. A small fire starts when 40% of the cache's life is left, a bigger one at 20%, and at 10% the whole castle is ablaze with a red glow, its windows red. That's your cue to reply while the cache is still warm. Once the cache has expired the fire goes out: there's nothing left to save. A fresh reply puts it out too.
 
-![The castle at 40%, 55%, 75% and 92% context](screenshots/fire.png)
+![The castle with 60%, 35%, 15% and 5% of the cache left](screenshots/fire.png)
 
-### Build up the castle
+### The castle grows as the context fills
 
-Every compaction raises the castle one tier, up to five: your own `/compact`, or the one Claude Code runs itself when the context is full. The fire burns as the context fills, and compacting puts the fire out and rebuilds the castle bigger. The castle always has its three towers and the keep, and grows bolder with each tier: banners at tier 2, more lit windows and a gold trim at 3, a taller main spire at 4, and at tier 5 a gold crest, brighter stone and a soft golden glow. The tier is kept across sessions.
+The castle always has its three towers and the keep, and grows bolder as the context fills: banners at 40%, more lit windows, a gold trim and a taller main spire at 60%, and at 80% a gold crest, brighter stone and a soft golden glow. A compaction shrinks the context, so the castle steps back down with it.
 
-![The castle at tiers 1 to 5](screenshots/tiers.png)
+![The castle at 20%, 40%, 60% and 80% context](screenshots/tiers.png)
 
 ![A session near its limits](screenshots/danger-narrow.png)
 
@@ -97,7 +97,7 @@ The mod only reads what Claude Code reports. It never blocks, changes or rewrite
 | `session.start` | Reads the session's usage, registers `/castle` and starts a 15-second refresh |
 | `session.end` | Saves this conversation's figures and your XP, and adds the XP to the saved total |
 | `turn.start` | Notes when a turn starts, to tell whether it found the cache warm |
-| `session.compact` | After a compaction finishes, raises the castle a tier and shows the smaller context. The compaction itself is unchanged |
+| `session.compact` | After a compaction finishes, counts it and shows the smaller context. The compaction itself is unchanged |
 | `classic.SessionStart` | When a cleared, resumed, forked or compacted conversation starts, reads its starting cost and context. A cleared or forked one starts its figures at zero; a resumed one gets its saved figures back |
 | `classic.PostModelSwitch` | After `/model`, starts the cache stopwatch again and notes how long the new cache lasts |
 | `session.measure` | Reads the context, rate limits and cost after each turn |

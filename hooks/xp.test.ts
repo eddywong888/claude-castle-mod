@@ -37,7 +37,7 @@ test('sessions add up, and achievements follow from the totals', () => {
   expect(p.unlocked).toContain('bat-slayer')
   expect(p.unlocked).not.toContain('devoted')
   expect(report(all, p)).toContain('Achievements (2 of 14)')
-  expect(report(all, p)).toContain('Compactions           0 (castle tier 1 of 5)')
+  expect(report(all, p)).toContain('Compactions           0')
 })
 
 test('test commands are recognised', () => {
@@ -82,10 +82,7 @@ test('streak achievements stay earned after a missed day', () => {
   expect(p.unlocked).toContain('devoted')
 })
 
-test('each compaction raises the castle a tier, up to five', () => {
-  expect(profileOf(emptyStats(), '2026-10-09').castleTier).toBe(1)
-  expect(profileOf({ ...emptyStats(), compacts: 2 }, '2026-10-09').castleTier).toBe(3)
-  expect(profileOf({ ...emptyStats(), compacts: 9 }, '2026-10-09').castleTier).toBe(5)
+test('compactions add up across sessions, older records included', () => {
   const old = { xp: 0, turns: 0, lines: 0, tests: 0, bats: 0, warm: 0, tidy: 0, night: 0, days: [] }
   expect(addStats(old, { ...emptyStats(), compacts: 1 }).compacts).toBe(1)
 })

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0
+
+- The castle burns as the prompt cache runs down: a small fire at 40% of its life left, medium at 20%, big at 10%. It goes out when the cache expires or a reply refreshes it.
+- The castle grows as the context fills: banners at 40%, gold trim and a taller spire at 60%, crest and glow at 80%. Compactions are still counted in `/castle`, but no longer change the castle.
+
 ## 0.8.0
 
 - The band fits how you pay. On a Claude subscription it shows the rate-limit moons and hides the session and 5-hour costs. With an API key or a third-party provider it shows the costs and hides the moons.

@@ -396,7 +396,7 @@ async function deriveProfile($: EngineInterface, everyone = false): Promise<Stat
   for (const s of others.values()) all = addStats(all, s)
   const p = profileOf(all, dayKey(now))
   const was = await read($, profile)
-  const changed = !was || was.xp !== p.xp || was.streak !== p.streak || was.unlocked.length !== p.unlocked.length || was.castleTier !== p.castleTier
+  const changed = !was || was.xp !== p.xp || was.streak !== p.streak || was.unlocked.length !== p.unlocked.length
   if (changed) await update($, profile, () => p)
 
   const seen = known
@@ -651,21 +651,15 @@ export const register: Register = on => {
     return result
   }).catch(($, e, next) => next(e))
 
-  // A compaction (the person's /compact, or Claude Code's own at its limit) rebuilds the castle a tier, up to five.
-  // A `precompute` only prepares one ahead of time, and a skipped compaction changes nothing: neither counts.
+  // A compaction (the person's /compact, or Claude Code's own at its limit) is counted for /castle, and shows the
+  // smaller context at once. A `precompute` only prepares one ahead of time, and a skipped one changes nothing.
   on('session.compact', async ($, e, next) => {
     const result = await next(e)
-    // Only the main conversation's compaction: a subagent's (`e.agentId`) changes neither its context nor the castle.
+    // Only the main conversation's compaction: a subagent's (`e.agentId`) doesn't change its context.
     if (!e.agentId && e.trigger !== 'precompute' && result.skip === undefined) {
       mine = { ...mine, compacts: (mine.compacts ?? 0) + 1 }
       dirty = true
-      // The tier from every session's records, read fresh, not from a profile that may be minutes old.
-      void syncProfile($, true)
-        .then(all => {
-          const n = all.compacts ?? 0
-          if (n >= 1 && n <= 4) $.ui.toast(`Castle rebuilt to tier ${n + 1} of 5`)
-        })
-        .catch(() => undefined)
+      void syncProfile($).catch(() => undefined)
       // The conversation the cache held is gone: the next reply writes a new one.
       await update($, cache, () => null)
       convDirty = true
@@ -742,7 +736,7 @@ export const register: Register = on => {
     if (arg === 'reset')
       return {
         text: [
-          'This deletes everything castle-hud saved: your XP, level, streak, achievements, castle tier and the 5-hour spending.',
+          'This deletes everything castle-hud saved: your XP, level, streak, achievements, compaction count and the 5-hour spending.',
           'Close your other Claude Code sessions first, or they save their own XP again.',
           'To go ahead, type: /castle reset confirm',
         ].join('\n'),
@@ -849,7 +843,9 @@ export const register: Register = on => {
 
     const { Box, Svg } = $.ui.resolve(e)
     const svg = buildSvg({ usage: u, cache: c, bats, now, prevPercent: shownPercent, mode: 'dark', windowUsd: spent ?? undefined, lastTurn: turn, lines: changed, startedAt: began || undefined, profile: prof, plan: paying })
-    const castle = castleSvg(pct, prof?.castleTier ?? 1)
+    // The share of the prompt cache's life left, which the fire follows; none without a warm cache.
+    const cacheLeft = c ? (c.at + (c.ttlMs ?? CACHE_TTL_MS) - now) / (c.ttlMs ?? CACHE_TTL_MS) : null
+    const castle = castleSvg(pct, cacheLeft !== null && cacheLeft > 0 ? cacheLeft : null)
     shownPercent = pct
 
     // Drawn as images, not interactive frames: an image swaps in place on a redraw, a frame reloads and flashes.

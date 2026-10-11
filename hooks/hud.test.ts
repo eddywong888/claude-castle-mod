@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { editLines, cacheHit, duration, elapsed, linesFromPatch, linesOf, legacyEntries, nextCache, spendKey, spendTime, k, moonLight, spentSince, timeLeftShort, wasWarm } from './hud'
-import { buildSvg, castleSvg, fireLevel, moonPath, zone } from './svg'
+import { buildSvg, castleSvg, fireLevel, moonPath, tierFor, zone } from './svg'
 
 const now = Date.parse('2026-10-09T10:00:00Z')
 
@@ -103,20 +103,21 @@ test('the cache follows real cache activity and stays warm for an hour', () => {
   expect(wasWarm(short, now + 30 * 60e3)).toBe(false)
 })
 
-test('castle burns as the context fills', () => {
-  expect(fireLevel(69)).toBe('none')
-  expect(fireLevel(70)).toBe('small')
-  expect(fireLevel(85)).toBe('medium')
-  expect(fireLevel(90)).toBe('big')
-  expect(castleSvg(49).source).toContain('#e3b341')
-  expect(castleSvg(50).source).not.toContain('#e3b341')
-  expect(castleSvg(50).source).toContain('#e0475b')
-  expect(castleSvg(50).source).not.toContain('class="fa"')
-  expect(castleSvg(72).source.match(/class="fa"/g)?.length).toBe(2) // the roof and the main window
-  expect(castleSvg(72).source).toContain('#e0475b')
-  expect(castleSvg(83).source.match(/class="fa"/g)?.length).toBe(8) // roofs, windows and the wall
-  expect(castleSvg(95).source.match(/class="fa"/g)?.length).toBe(5) // fewer, bigger fires
-  expect(castleSvg(95).source).toContain('blaze')
+test('castle burns as the prompt cache runs down', () => {
+  expect(fireLevel(null)).toBe('none')
+  expect(fireLevel(0.5)).toBe('none')
+  expect(fireLevel(0.4)).toBe('small')
+  expect(fireLevel(0.2)).toBe('medium')
+  expect(fireLevel(0.1)).toBe('big')
+  expect(fireLevel(0)).toBe('none') // expired: nothing left to save
+  expect(castleSvg(10, 0.5).source).toContain('#e3b341')
+  expect(castleSvg(10, 0.5).source).not.toContain('class="fa"')
+  expect(castleSvg(10, 0.35).source.match(/class="fa"/g)?.length).toBe(2) // the roof and the main window
+  expect(castleSvg(10, 0.35).source).toContain('#e0475b')
+  expect(castleSvg(10, 0.15).source.match(/class="fa"/g)?.length).toBe(8) // roofs, windows and the wall
+  expect(castleSvg(10, 0.05).source.match(/class="fa"/g)?.length).toBe(5) // fewer, bigger fires
+  expect(castleSvg(10, 0.05).source).toContain('blaze')
+  expect(castleSvg(10, 0.05).alt).toContain('5% of the cache left')
 })
 
 test('spend keys carry their own time', () => {
@@ -137,15 +138,16 @@ test('edits count what really changed', () => {
   expect(editLines('Write', { content: 'x\ny' }, { type: 'create', originalFile: null, structuredPatch: [] })).toEqual({ added: 2, removed: 0 })
 })
 
-test('castle grows bolder with its tier, keeping all its towers', () => {
-  const spires = (t: number) => castleSvg(0, t).source.match(/<polygon points=/g)?.length ?? 0
-  expect(spires(1)).toBe(3) // three spired towers and the keep, at every tier
-  expect(castleSvg(0, 1).source).not.toContain('#c8283f')
-  expect(castleSvg(0, 2).source).toContain('#c8283f') // banners
-  expect(castleSvg(0, 3).source).toContain('opacity=".55"/>') // gold trim
-  expect(castleSvg(0, 4).source).toContain('96,-6') // taller main spire
-  expect(spires(5)).toBe(4) // and the crest
-  expect(castleSvg(0, 9).alt).toContain('tier 5 of 5')
+test('castle grows bolder as the context fills, keeping all its towers', () => {
+  expect([tierFor(0), tierFor(39), tierFor(40), tierFor(60), tierFor(80), tierFor(100)]).toEqual([1, 1, 2, 3, 4, 4])
+  const spires = (p: number) => castleSvg(p).source.match(/<polygon points=/g)?.length ?? 0
+  expect(spires(0)).toBe(3) // three towers from the start
+  expect(castleSvg(0).source).not.toContain('#c8283f')
+  expect(castleSvg(40).source).toContain('#c8283f') // banners
+  expect(castleSvg(60).source).toContain('opacity=".55"/>') // gold trim
+  expect(castleSvg(60).source).toContain('96,-6') // taller main spire
+  expect(spires(80)).toBe(4) // and the crest
+  expect(castleSvg(80).alt).toContain('tier 4 of 4')
 })
 
 test('a subscription shows the moons and no costs; the API, the other way round', () => {

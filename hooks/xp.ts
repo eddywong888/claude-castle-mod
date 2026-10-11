@@ -140,7 +140,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'lord', name: 'Lord of the Castle', how: 'Reach level 50', met: (_s, level) => level >= 50 },
 ]
 
-export type Profile = Level & { xp: number; streak: number; unlocked: string[]; castleTier: number }
+export type Profile = Level & { xp: number; streak: number; unlocked: string[] }
 
 export function profileOf(s: Stats, today: string): Profile {
   const lv = levelOf(s.xp)
@@ -148,8 +148,7 @@ export function profileOf(s: Stats, today: string): Profile {
   // Achievements read the longest streak ever, so a missed day never takes one back.
   const best = Math.max(streak, longestStreak(s.days))
   const unlocked = ACHIEVEMENTS.filter(a => a.met(s, lv.level, best)).map(a => a.id)
-  // The castle starts at tier 1 and rises one tier per compaction, up to 5.
-  return { ...lv, xp: s.xp, streak, unlocked, castleTier: Math.min(5, 1 + (s.compacts ?? 0)) }
+  return { ...lv, xp: s.xp, streak, unlocked }
 }
 
 // A test runner at the start of a command: `npm test`, `npm t`, `pnpm run test:unit`, `pytest`, `go test`,
@@ -258,7 +257,7 @@ export function report(s: Stats, p: Profile): string {
     row('Subagents finished', `${s.bats}`),
     row('Warm-cache replies', `${s.warm}`),
     row('Turns under 60%', `${s.tidy}`),
-    row('Compactions', `${s.compacts ?? 0} (castle tier ${p.castleTier} of 5)`),
+    row('Compactions', `${s.compacts ?? 0}`),
     '',
     `Achievements (${got.size} of ${ACHIEVEMENTS.length})`,
     ...ACHIEVEMENTS.map(a => `  ${got.has(a.id) ? '✓' : '·'} ${a.name.padEnd(20)}${a.how}`),
