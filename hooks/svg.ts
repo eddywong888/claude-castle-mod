@@ -44,6 +44,17 @@ const RESET_LABEL: Record<string, string> = { five_hour: '5hr', seven_day: '7d' 
 const DAGGER = ['..X..', '..X..', '.XWX.', '.XWX.', '.XWX.', '.XWX.', 'BBBBB', '..B..', '..B..']
 const SCROLL = ['.XXXXXXX.', 'XWWWWWWWX', '.WLLLLLW.', '.WWWWWWW.', '.WLLLLW..', '.WWWWWWW.', 'XWWWWWWWX', '.XXXXXXX.']
 
+/** One icon per title, shown in the level section: a lantern, a stake, the crest, a whip, a crescent moon, a crown. */
+export const TITLE_ICONS: Record<string, string[]> = {
+  Wanderer: ['...ss....', '..s..s...', '.XXXXXXX.', '.XGYYYGX.', '.XGYOYGX.', '.XGYYYGX.', '.XXXXXXX.', '..XXXXX..', '.........'],
+  'Vampire Hunter': ['....S....', '....S....', '..SSSSS..', '....S....', '....S....', '....B....', '....B....', '....b....', '....b....'],
+  'Belmont Heir': ['XXXXXXXX', 'XGGGGGGX', 'XGGRRGGX', 'XGRRRRGX', 'XGGRRGGX', '.XGRRGX.', '.XGGGGX.', '..XGGX..', '...XX...'],
+  'Whip Master': ['...BBBB..', '..B....B.', '.B..BB..B', '.B.B..B.B', '.B..BB.B.', '..B...B..', '...BBB...', '..XX.....', '.XX......'],
+  'Night Stalker': ['...WWW...', '..WWK....', '.WWK..R..', '.WWK.....', '.WWK..R..', '.WWK.....', '..WWK....', '...WWW...', '.........'],
+  'Lord of the Castle': ['X...X...X', 'XX.XYX.XX', 'XGXGRGXGX', 'XGGGGGGGX', 'XGRGHGRGX', 'XGGGGGGGX', 'XXXXXXXXX', '.........', '.........'],
+}
+const ICON_COLORS = { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', R: 'var(--blood)', Y: '#ffd84a', O: '#ff8a1f', S: '#c9c3d1', s: 'var(--stone)', B: '#8a5a2b', b: '#5e3b1a', W: 'var(--lit)', K: '#2a2133' }
+
 const CREST = ['XXXXXXXX', 'XGGGGGGX', 'XGGRRGGX', 'XGRRRRGX', 'XGGRRGGX', '.XGRRGX.', '.XGGGGX.', '..XGGX..', '...XX...']
 
 const STOPWATCH = ['...BB...', '.XXXXXX.', 'XWWWHWWX', 'XWWWHWWX', 'XWWWHHWX', 'XWWWWWWX', 'XWWWWWWX', '.XXXXXX.']
@@ -262,7 +273,7 @@ ${sprite(BAG, { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', T
     alt.push(n === 0 ? 'No subagents running' : `${n} ${caption} running`)
   }
 
-  // Level: the crest, the level and title, and a gold bar of XP toward the next level.
+  // Level: the title's icon, the level and title, and a gold bar of XP toward the next level.
   if (h.profile) {
     const p = h.profile
     const value = `LV ${p.level}`
@@ -274,7 +285,7 @@ ${sprite(BAG, { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', T
     const secondW = barW + 10 + xpText.length * CAPTION_W
     sections.push({
       width: 34 + Math.max(firstW, secondW),
-      body: x => `<g transform="translate(${x} 0)">${sprite(CREST, { X: 'var(--goldDark)', G: 'var(--gold)', R: 'var(--blood)' }, 0, 14, 3.2)}
+      body: x => `<g transform="translate(${x} 0)">${sprite(TITLE_ICONS[p.title] ?? CREST, ICON_COLORS, 0, 14, 3.2)}
 <text x="34" y="27"><tspan class="v" fill="var(--gold)">${esc(value)}</tspan><tspan class="c" dx="8">${esc(name)}</tspan></text>
 <rect x="34" y="38" width="${barW}" height="7" fill="var(--track)"/><rect x="34" y="38" width="${(barW * fill).toFixed(1)}" height="7" fill="var(--gold)"/><rect x="34" y="38" width="${(barW * fill).toFixed(1)}" height="2" fill="var(--goldLight)"/>
 <text x="${34 + barW + 10}" y="46" class="c">${esc(xpText)}</text></g>`,
@@ -412,7 +423,7 @@ export function castleSvg(percent = 0, cacheLeft: number | null = null): { sourc
   const flames =
     fire === 'small' ? flame('small', main, roof, 0) + flame('small', 95, 27, 0.1)
     : fire === 'medium' ? flame('medium', main, roof, 0) + side('small', 0.1) + windowFire(0.05) + flame('small', 64, 38, 0.05) + flame('small', 124, 38, 0.1)
-    // At 90% fewer fires but bigger: the main tower ablaze top to bottom, and one great fire on the wall.
+    // With 10% of the cache left, fewer fires but bigger: the main tower ablaze top to bottom, and one great fire on the wall.
     : fire === 'big' ? flame('big', main, roof, 0) + side('medium', 0.1) + flame('big', 95, 30, 0.05, 2.6) + flame('big', 124, 38, 0.12, 3)
     : ''
   const glow = fire === 'big'

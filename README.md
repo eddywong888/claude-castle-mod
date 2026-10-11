@@ -43,7 +43,7 @@ If the HUD doesn't change after the reload, restart Claude Code. Restart any oth
 | <img src="screenshots/icons/dagger.svg" height="22" alt=""> | **Dagger** | How long the last reply took and how many tokens it wrote. |
 | <img src="screenshots/icons/scroll.svg" height="22" alt=""> | **Scroll** | Lines added and removed by Claude's Edit and Write tools in this conversation. |
 | <img src="screenshots/icons/bat.svg" height="22" alt=""> | **Bats** | One flapping bat per subagent running now. |
-| <img src="screenshots/icons/crest.svg" height="22" alt=""> | **Crest** | Your level, title, XP toward the next level and your daily streak. |
+| <img src="screenshots/icons/crest.svg" height="22" alt=""> | **Title icon** | Your level, title, XP toward the next level and your daily streak. The icon changes with your title. |
 
 ### The castle burns as the cache runs down
 
@@ -72,7 +72,9 @@ On a narrow window the sections wrap onto more rows, each at full size. The cast
 | Run tests that pass (npm, pnpm, yarn or bun test, pytest, jest, vitest, go test, cargo test and others) | +25 |
 | A subagent finishes | +15 |
 
-Each level needs a little more XP than the last. Titles change at level 1 (Wanderer), 5 (Vampire Hunter), 10 (Belmont Heir), 20 (Whip Master), 35 (Night Stalker) and 50 (Lord of the Castle).
+Each level needs a little more XP than the last. Titles change at level 1 (Wanderer), 5 (Vampire Hunter), 10 (Belmont Heir), 20 (Whip Master), 35 (Night Stalker) and 50 (Lord of the Castle), and each title has its own icon: a lantern, a stake, the crest, a whip, a crescent moon and a crown.
+
+![The six title icons](screenshots/titles.png)
 
 Your **streak** counts the days in a row with at least one finished turn. There are 14 **achievements**, from First Blood (your first turn) to Eternal Night (a 30-day streak). A pop-up appears for each level-up and each new achievement.
 
@@ -94,7 +96,7 @@ The mod only reads what Claude Code reports. It never blocks, changes or rewrite
 
 | Hook | What it does |
 |---|---|
-| `session.start` | Reads the session's usage, registers `/castle` and starts a 15-second refresh |
+| `session.start` | Reads the session's usage and what kind of login it has (subscription or API key, never the key itself), registers `/castle` and starts a 15-second refresh |
 | `session.end` | Saves this conversation's figures and your XP, and adds the XP to the saved total |
 | `turn.start` | Notes when a turn starts, to tell whether it found the cache warm |
 | `session.compact` | After a compaction finishes, counts it and shows the smaller context. The compaction itself is unchanged |

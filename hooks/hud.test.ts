@@ -1,7 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 
 import { editLines, cacheHit, duration, elapsed, linesFromPatch, linesOf, legacyEntries, nextCache, spendKey, spendTime, k, moonLight, spentSince, timeLeftShort, wasWarm } from './hud'
-import { buildSvg, castleSvg, fireLevel, moonPath, tierFor, zone } from './svg'
+import { buildSvg, castleSvg, fireLevel, moonPath, tierFor, TITLE_ICONS, zone } from './svg'
+import { titleOf } from './xp'
 
 const now = Date.parse('2026-10-09T10:00:00Z')
 
@@ -166,4 +167,14 @@ test('a subscription shows the moons and no costs; the API, the other way round'
   const unknown = buildSvg(base).alt
   expect(unknown).toContain('5h limit')
   expect(unknown).toContain('Session cost')
+})
+
+test('every title has its own icon in the level section', () => {
+  const titles = [1, 5, 10, 20, 35, 50].map(titleOf)
+  expect(new Set(titles).size).toBe(6)
+  for (const t of titles) expect([t, TITLE_ICONS[t] !== undefined]).toEqual([t, true])
+  const lantern = buildSvg({ usage: null, cache: null, bats: 0, now, prevPercent: 0, mode: 'dark', profile: { level: 1, title: 'Wanderer', into: 0, need: 150, xp: 0, streak: 0, unlocked: [] } }).source
+  const crown = buildSvg({ usage: null, cache: null, bats: 0, now, prevPercent: 0, mode: 'dark', profile: { level: 50, title: 'Lord of the Castle', into: 0, need: 9000, xp: 99999, streak: 0, unlocked: [] } }).source
+  expect(lantern).toContain('#ff8a1f') // the lantern's flame
+  expect(crown).not.toContain('#ff8a1f')
 })

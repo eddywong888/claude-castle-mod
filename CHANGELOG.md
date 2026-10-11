@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.0
+
+- Each title has its own icon in the level section: a lantern (Wanderer), a stake (Vampire Hunter), the crest (Belmont Heir), a whip (Whip Master), a crescent moon (Night Stalker) and a crown (Lord of the Castle).
+- A gateway's spend limit is no longer taken for a subscription, so gateway users keep seeing their costs.
+- On a five-minute cache the band redraws at each fire stage, so none is skipped.
+- PRIVACY.md and the README say the mod asks what kind of login a session has, and never sees or uses the key.
+
 ## 0.9.0
 
 - The castle burns as the prompt cache runs down: a small fire at 40% of its life left, medium at 20%, big at 10%. It goes out when the cache expires or a reply refreshes it.

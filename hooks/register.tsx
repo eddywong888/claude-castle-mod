@@ -517,13 +517,16 @@ async function refreshUsage($: EngineInterface) {
   await noteReset($, fresh)
 }
 
+/** A subscription's own rate limits: a gateway's spend limit isn't one, its user pays per token. */
+const subscriptionLimits = (u: Usage) => u.limits.some(l => l.kind === 'five_hour' || l.kind === 'seven_day')
+
 /**
  * How the account pays. Rate limits are reported only on a subscription; otherwise the credential tells: a
  * claude.ai login (bearer) is a subscription, an API key or a third-party provider is billed per token.
  */
 async function notePlan($: EngineInterface, u: Usage) {
   let found: 'subscription' | 'api'
-  if (u.limits.length > 0) found = 'subscription'
+  if (subscriptionLimits(u)) found = 'subscription'
   else {
     const auth = await $.session.authorize().catch(() => undefined)
     if (auth === undefined) return // couldn't tell: leave the band as it is
@@ -562,15 +565,17 @@ export const register: Register = on => {
       // Write only what changed: every write redraws the band.
       await attempt(() => countBats($))
       await attempt(async () => {
-        // The band redraws each minute, and also the moment the cache goes cold, so the stopwatch never shows
-        // a minute left on a cache that has expired.
+        // The band redraws each minute, and also the moment the cache crosses a fire stage (60%, 80% and 90% of its
+        // life gone) or goes cold: on a five-minute cache those come seconds apart, and none may be skipped.
         const now = await $.clock.now()
         const c = await read($, cache)
-        const expires = c?.at ? c.at + (c.ttlMs ?? CACHE_TTL_MS) : 0
+        const ttl = c?.ttlMs ?? CACHE_TTL_MS
+        const marks = c?.at ? [0.6, 0.8, 0.9, 1].map(f => c.at + ttl * f) : []
         const minute = Math.floor(now / 60000) * 60000
+        const crossed = Math.max(minute, ...marks.filter(m => m > minute && m <= now))
         const prev = await read($, tick)
-        // Never back within a minute: a new cache after the expiry was marked mustn't move the band's clock back.
-        const mark = Math.max(expires > minute && expires <= now ? expires : minute, prev >= minute && prev <= now ? prev : 0)
+        // Never back within a minute: a new cache after a stage was marked mustn't move the band's clock back.
+        const mark = Math.max(crossed, prev >= minute && prev <= now ? prev : 0)
         if (mark !== prev) await update($, tick, () => mark)
       })
       // Re-sum the window each refresh, so it drops back to $0 after a reset even when idle.
@@ -686,7 +691,7 @@ export const register: Register = on => {
     await update($, usage, () => u)
     await noteReset($, u).catch(() => undefined)
     // A reading with rate limits settles it: a subscription.
-    if (u.limits.length > 0 && (await read($, plan)) !== 'subscription') await update($, plan, () => 'subscription' as const)
+    if (subscriptionLimits(u) && (await read($, plan)) !== 'subscription') await update($, plan, () => 'subscription' as const)
 
     if (e.cost && e.changed.includes('cost')) {
       const t = await $.clock.now()

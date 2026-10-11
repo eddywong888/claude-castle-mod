@@ -11,7 +11,7 @@ export type Stats = {
   tidy: number
   night: number
   days: string[]
-  /** Times this session's conversation was compacted: each raises the castle a tier. Absent in older records. */
+  /** Times this session's conversation was compacted, for /castle. Absent in older records. */
   compacts?: number
   /** When the record was last saved: a record left unsaved for days belongs to a session that ended. */
   savedAt?: number

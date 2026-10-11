@@ -10,7 +10,7 @@ const RESET = '2026-10-09T12:00:00Z'
 function world(on: On, entries: Record<string, unknown> = {}) {
   const clock = mock.clock(on, { now: T0 })
   const store = new Map<string, unknown>(Object.entries(entries))
-  const s = { id: 's1', api: false, usd: 0, tokens: undefined as number | undefined, agents: [] as { id: string; status: string }[], toasts: [] as string[] }
+  const s = { id: 's1', api: false, gateway: false, usd: 0, tokens: undefined as number | undefined, agents: [] as { id: string; status: string }[], toasts: [] as string[] }
   on('store.get', (_$, e) => ({ value: store.get(e.key) }))
   on('store.set', (_$, e) => {
     store.set(e.key, JSON.parse(JSON.stringify(e.value)))
@@ -26,7 +26,7 @@ function world(on: On, entries: Record<string, unknown> = {}) {
   on('session.usage', () => ({ value: {
     startedAt: T0,
     context: { tokens: s.tokens, window: 200_000, percent: s.tokens === undefined ? undefined : Math.round((s.tokens / 200_000) * 100) },
-    rateLimits: s.api ? [] : [{ kind: 'five_hour', percentUsed: 1, resetsAt: RESET }],
+    rateLimits: s.api ? (s.gateway ? [{ kind: 'spend_limit', percentUsed: 10 }] : []) : [{ kind: 'five_hour', percentUsed: 1, resetsAt: RESET }],
     cost: { usd: s.usd },
   } }))
   on('agent.list', () => ({ value: s.agents }) as never)
@@ -40,6 +40,7 @@ function world(on: On, entries: Record<string, unknown> = {}) {
   on('turn.start', (_$, e) => ({ turnId: e.turnId }))
   on('turn.complete', (_$, e) => ({ text: e.answer, usage: e.usage }))
   on('classic.SessionStart', () => ({}) as never)
+  on('classic.PostModelSwitch', () => ({}) as never)
   return { clock, store, s }
 }
 
@@ -75,7 +76,7 @@ test('spend kept in the old list format moves to write-once keys, once', async (
   expect(spendTotal(store)).toBe(3)
 })
 
-test('only the main conversation’s finished compactions raise the castle', async ($, on) => {
+test('only the main conversation’s finished compactions are counted', async ($, on) => {
   const { clock, store } = world(on)
   on('session.compact', (_$, e) => (e.trigger !== 'auto' ? { messages: [{ role: 'user', text: 'summary', toolUses: [] }], tokensAfter: 20_000 } : { skip: 'no' }) as never)
   await $.session.start(start as never)
@@ -361,4 +362,32 @@ test('the castle catches fire as the cache runs down, and goes out when it expir
   expect(await band($ as never)).toContain('on fire (big)')
   await clock.advance(6 * 60e3)
   expect(await band($ as never)).not.toContain('on fire')
+})
+
+test('a gateway’s spend limit is not taken for a subscription', async ($, on) => {
+  const { clock, s } = world(on)
+  on('session.authorize', () => ({ value: null }) as never)
+  s.api = true
+  s.gateway = true
+  await $.session.start(start as never)
+  await $.session.measure({ context: { tokens: 1000, window: 200_000, percent: 1 }, rateLimits: [{ kind: 'spend_limit', percentUsed: 10 }], cost: { usd: 1 }, changed: ['cost', 'rateLimits'] } as never)
+  await clock.advance(15_000)
+  expect(await band($ as never)).toContain('Session cost')
+})
+
+test('on a five-minute cache every fire stage shows', async ($, on) => {
+  const { clock } = world(on)
+  await $.session.start(start as never)
+  await $.classic.PostModelSwitch({ from_model: 'a', to_model: 'b', requested_model: null, source: 'command', context_tokens: 0, prompt_cache_warm: false, cache_ttl: '5m', estimated_cache_write_usd: 0 } as never)
+  await clock.advance(10_000) // a reply 10 seconds past the minute
+  await $.turn.start({ text: 'hi', turnId: 't1' } as never)
+  const usage = { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 500, model: 'm' }
+  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer', usage } as never)
+  const seen = new Set<string>()
+  for (let i = 0; i < 24; i++) {
+    await clock.advance(15_000)
+    const m = /on fire \((\w+)\)/.exec(await band($ as never))
+    if (m?.[1]) seen.add(m[1])
+  }
+  expect([...seen].sort()).toEqual(['big', 'medium', 'small'])
 })
