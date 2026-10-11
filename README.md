@@ -81,6 +81,7 @@ Type `/castle` to see your level, where your XP came from and every achievement.
 ## Good to know
 
 - **Cache life.** The stopwatch counts down one hour from each reply, the life of Claude Code's prompt cache. A reply counts as warm when it comes within that hour. If you switch model and Claude Code reports a five-minute cache, it counts down five minutes instead. A compaction or a model switch starts the stopwatch again.
+- **Subscription or API.** On a Claude subscription the band shows the moons and leaves out the coin and money bag, since you aren't billed per token. With an API key, or through a third-party provider, it shows the costs and leaves out the moons, which only a subscription has. Until the mod can tell, it shows both.
 - **The 5-hour total** counts only sessions running this mod, from when it was installed. Usage on claude.ai or in other tools isn't included.
 - **Lines changed** counts only Claude's Edit and Write tools. Files changed by shell commands such as `sed` or `git` aren't counted.
 - **After a restart** a conversation's lines changed, last turn and cache stopwatch come back as they were. `/clear` starts them over; `/resume` brings back the resumed conversation's. A conversation's figures are kept for a month after you last used it.

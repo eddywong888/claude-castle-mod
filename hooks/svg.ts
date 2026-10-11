@@ -7,7 +7,10 @@ import type { Cache, LastTurn, Lines, Profile, Usage } from '../types'
 import { duration, elapsed } from './hud'
 
 export type Mode = 'light' | 'dark' | 'auto'
-export type Hud = { usage: Usage | null; cache: Cache | null; bats: number; now: number; prevPercent: number; mode: Mode; windowUsd?: number; lastTurn?: LastTurn | null; lines?: Lines; startedAt?: number; profile?: Profile | null }
+/** How the account pays: a subscription has rate limits and no bill per token; the API, the other way round. */
+export type Plan = 'subscription' | 'api'
+
+export type Hud = { usage: Usage | null; cache: Cache | null; bats: number; now: number; prevPercent: number; mode: Mode; windowUsd?: number; lastTurn?: LastTurn | null; lines?: Lines; startedAt?: number; profile?: Profile | null; plan?: Plan }
 
 /** The HUD is laid out at 23px values; drawn at this scale, values come out at 14px. */
 export const SCALE = 14 / 23
@@ -120,8 +123,8 @@ export function buildSvg(h: Hud): { parts: Part[]; source: string; alt: string }
     alt.push(`Context ${value}, ${caption}`)
   }
 
-  // Rate limits: one moon per window, full when it refreshed, new when it resets.
-  for (const l of u?.limits ?? []) {
+  // Rate limits: one moon per window, full when it refreshed, new when it resets. Not on the API, which has none.
+  for (const l of h.plan === 'api' ? [] : (u?.limits ?? [])) {
     const label = LIMIT_LABEL[l.kind] ?? l.kind
     const value = `${l.percentUsed}%`
     // First line: the percent with its window's name beside it; second line: time left and when it resets.
@@ -140,7 +143,7 @@ ${light > 0.01 ? litMoon(15, 31, 14.5, light) : ''}
     })
     alt.push(`${label} limit ${value}, ${name} ${caption}`)
   }
-  if ((u?.limits.length ?? 0) === 0) {
+  if (h.plan !== 'api' && (u?.limits.length ?? 0) === 0) {
     sections.push({
       width: 40 + blockWidth('—', 'no limit data yet'),
       body: x => `<g transform="translate(${x} 0)"><circle cx="15" cy="31" r="14.5" fill="var(--track)" stroke="var(--stone)" stroke-width=".8"/>${textBlock(40, '—', 'no limit data yet', 'var(--stone)')}</g>`,
@@ -166,8 +169,9 @@ ${sprite(STOPWATCH, { X: 'var(--ink)', W: warm ? 'var(--lit)' : 'var(--track)', 
     alt.push(`Cache ${value}, ${caption}`)
   }
 
-  // Cost: the coin for this session, the money bag for the 5-hour window.
-  {
+  // Cost: the coin for this session, the money bag for the 5-hour window. Not on a subscription, which isn't
+  // billed per token: the moons show what matters there.
+  if (h.plan !== 'subscription') {
     const value = u?.usd === undefined ? '—' : `$${u.usd.toFixed(2)}`
     sections.push({
       width: 36 + blockWidth(value, 'session'),

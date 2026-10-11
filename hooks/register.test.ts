@@ -10,7 +10,7 @@ const RESET = '2026-10-09T12:00:00Z'
 function world(on: On, entries: Record<string, unknown> = {}) {
   const clock = mock.clock(on, { now: T0 })
   const store = new Map<string, unknown>(Object.entries(entries))
-  const s = { id: 's1', usd: 0, tokens: undefined as number | undefined, agents: [] as { id: string; status: string }[], toasts: [] as string[] }
+  const s = { id: 's1', api: false, usd: 0, tokens: undefined as number | undefined, agents: [] as { id: string; status: string }[], toasts: [] as string[] }
   on('store.get', (_$, e) => ({ value: store.get(e.key) }))
   on('store.set', (_$, e) => {
     store.set(e.key, JSON.parse(JSON.stringify(e.value)))
@@ -26,7 +26,7 @@ function world(on: On, entries: Record<string, unknown> = {}) {
   on('session.usage', () => ({ value: {
     startedAt: T0,
     context: { tokens: s.tokens, window: 200_000, percent: s.tokens === undefined ? undefined : Math.round((s.tokens / 200_000) * 100) },
-    rateLimits: [{ kind: 'five_hour', percentUsed: 1, resetsAt: RESET }],
+    rateLimits: s.api ? [] : [{ kind: 'five_hour', percentUsed: 1, resetsAt: RESET }],
     cost: { usd: s.usd },
   } }))
   on('agent.list', () => ({ value: s.agents }) as never)
@@ -320,4 +320,25 @@ test('a session closing after another session’s reset doesn’t put its old XP
   store.clear()
   await $.session.end({ reason: 'other', sessionId: 's1', resume: undefined } as never)
   expect((store.get('archive:xp') as { total: Stats } | undefined)?.total.xp ?? 0).toBe(0)
+})
+
+test('the band follows how the account pays', async ($, on) => {
+  const { clock, s } = world(on)
+  on('session.authorize', () => ({ value: { handle: 'h', kind: 'api-key' } }) as never)
+  s.api = true
+  await $.session.start(start as never)
+  await clock.advance(15_000)
+  const api = await band($ as never)
+  expect(api).toContain('Session cost')
+  expect(api).not.toContain('rate-limit')
+})
+
+test('a subscription shows its moons and hides the costs', async ($, on) => {
+  const { clock } = world(on)
+  on('session.authorize', () => ({ value: { handle: 'h', kind: 'bearer' } }) as never)
+  await $.session.start(start as never)
+  await clock.advance(15_000)
+  const sub = await band($ as never)
+  expect(sub).toContain('5h limit')
+  expect(sub).not.toContain('Session cost')
 })

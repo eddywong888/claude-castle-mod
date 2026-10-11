@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0
+
+- The band fits how you pay. On a Claude subscription it shows the rate-limit moons and hides the session and 5-hour costs. With an API key or a third-party provider it shows the costs and hides the moons.
+- A fuller description for the plugin listing (0.7.11).
+
 ## 0.7.10
 
 The release after four Opus audits, a Sonnet audit and two Codex reviews.

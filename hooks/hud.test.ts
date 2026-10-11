@@ -147,3 +147,21 @@ test('castle grows bolder with its tier, keeping all its towers', () => {
   expect(spires(5)).toBe(4) // and the crest
   expect(castleSvg(0, 9).alt).toContain('tier 5 of 5')
 })
+
+test('a subscription shows the moons and no costs; the API, the other way round', () => {
+  const base = {
+    usage: { usd: 2.9, tokens: 1000, window: 1e6, percent: 1, limits: [{ kind: 'five_hour', percentUsed: 1, resetsAt: '2026-10-09T11:37:00Z' }] },
+    cache: null, bats: 0, now, prevPercent: 0, mode: 'dark' as const, windowUsd: 4,
+  }
+  const sub = buildSvg({ ...base, plan: 'subscription' }).alt
+  expect(sub).toContain('5h limit')
+  expect(sub).not.toContain('Session cost')
+  expect(sub).not.toContain('5-hour window cost')
+  const api = buildSvg({ ...base, usage: { ...base.usage, limits: [] }, plan: 'api' }).alt
+  expect(api).toContain('Session cost $2.90')
+  expect(api).not.toContain('rate-limit')
+  // Not known yet: everything shows.
+  const unknown = buildSvg(base).alt
+  expect(unknown).toContain('5h limit')
+  expect(unknown).toContain('Session cost')
+})

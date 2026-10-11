@@ -18,6 +18,8 @@ const startedAt = atom({ plugin: 'castle-hud', key: 'startedAt' } as const, 0)
 const profile = atom({ plugin: 'castle-hud', key: 'profile' } as const, null)
 // This session's XP id, kept in the session's state so a reload keeps adding to the same record.
 const xpId = atom({ plugin: 'castle-hud', key: 'xpId' } as const, '')
+// How the account pays, once known: a subscription's band shows the moons, the API's the costs.
+const plan = atom({ plugin: 'castle-hud', key: 'plan' } as const, null)
 
 // Cross-session spend. Every cost increase is its own write-once key, `spend:<t>:<id>`, holding the dollars:
 // sessions never overwrite each other, and clean-up deletes only keys whose own time has passed.
@@ -515,6 +517,21 @@ async function refreshUsage($: EngineInterface) {
   await noteReset($, fresh)
 }
 
+/**
+ * How the account pays. Rate limits are reported only on a subscription; otherwise the credential tells: a
+ * claude.ai login (bearer) is a subscription, an API key or a third-party provider is billed per token.
+ */
+async function notePlan($: EngineInterface, u: Usage) {
+  let found: 'subscription' | 'api'
+  if (u.limits.length > 0) found = 'subscription'
+  else {
+    const auth = await $.session.authorize().catch(() => undefined)
+    if (auth === undefined) return // couldn't tell: leave the band as it is
+    found = auth?.kind === 'bearer' ? 'subscription' : 'api'
+  }
+  if (found !== (await read($, plan))) await update($, plan, () => found)
+}
+
 /** Reads this conversation's starting figures: on load, and after /clear, /resume or a fork. */
 async function startOver($: EngineInterface, id?: string, restore = true) {
   convId = id ?? (await $.session.id().catch(() => undefined))
@@ -524,6 +541,7 @@ async function startOver($: EngineInterface, id?: string, restore = true) {
   lastUsd = now.cost?.usd
   await update($, startedAt, () => now.startedAt)
   await noteReset($, u)
+  await notePlan($, u).catch(() => undefined)
   if (restore) await restoreConversation($).catch(() => undefined)
 }
 
@@ -673,6 +691,8 @@ export const register: Register = on => {
     const u = toUsage(e)
     await update($, usage, () => u)
     await noteReset($, u).catch(() => undefined)
+    // A reading with rate limits settles it: a subscription.
+    if (u.limits.length > 0 && (await read($, plan)) !== 'subscription') await update($, plan, () => 'subscription' as const)
 
     if (e.cost && e.changed.includes('cost')) {
       const t = await $.clock.now()
@@ -823,11 +843,12 @@ export const register: Register = on => {
     const changed = await read($, lines)
     const began = await read($, startedAt)
     const prof = await read($, profile)
+    const paying = (await read($, plan)) ?? undefined
     const now = (await read($, tick)) || (await $.clock.now())
     const pct = u?.percent ?? 0
 
     const { Box, Svg } = $.ui.resolve(e)
-    const svg = buildSvg({ usage: u, cache: c, bats, now, prevPercent: shownPercent, mode: 'dark', windowUsd: spent ?? undefined, lastTurn: turn, lines: changed, startedAt: began || undefined, profile: prof })
+    const svg = buildSvg({ usage: u, cache: c, bats, now, prevPercent: shownPercent, mode: 'dark', windowUsd: spent ?? undefined, lastTurn: turn, lines: changed, startedAt: began || undefined, profile: prof, plan: paying })
     const castle = castleSvg(pct, prof?.castleTier ?? 1)
     shownPercent = pct
 
