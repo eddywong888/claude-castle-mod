@@ -439,6 +439,7 @@ async function wipe($: EngineInterface) {
   known = null
   seenSpend.clear()
   knownReset = undefined
+  soundOn = undefined
   // This conversation's figures too: kept, the next save would write them back.
   turnLines = 0
   convDirty = false
@@ -517,6 +518,24 @@ async function refreshUsage($: EngineInterface) {
   await noteReset($, fresh)
 }
 
+// The bell when a reply is done: on unless muted, the choice kept across sessions.
+const SOUND_KEY = 'sound'
+let soundOn: boolean | undefined
+
+async function soundIsOn($: EngineInterface): Promise<boolean> {
+  if (soundOn === undefined) soundOn = (await $.store.get(SOUND_KEY)) !== 'off'
+  return soundOn
+}
+
+/** Tolls the bell and organ chord, if the sound is on; a failure to play is silent. */
+async function ringBell($: EngineInterface) {
+  try {
+    if (await soundIsOn($)) await $.audio.play({ asset: 'sounds/done.wav' })
+  } catch {
+    // no player here (a Linux or Windows terminal), or the clip couldn't play
+  }
+}
+
 /** A subscription's own rate limits: a gateway's spend limit isn't one, its user pays per token. */
 const subscriptionLimits = (u: Usage) => u.limits.some(l => l.kind === 'five_hour' || l.kind === 'seven_day')
 
@@ -585,7 +604,7 @@ export const register: Register = on => {
     }
     // The timer first: if anything below fails, the band still keeps time.
     $.clock.every(15_000, () => void refresh())
-    await attempt(() => $.command.register({ name: 'castle', description: 'Show your castle-hud level, streak and achievements', argumentHint: '[reset]' }))
+    await attempt(() => $.command.register({ name: 'castle', description: 'Show your castle-hud level, streak and achievements', argumentHint: '[sound on|off | reset]' }))
     await attempt(() => $.store.delete('ledger')) // the shared list an earlier version kept
     // Keep one XP record per session across reloads: reuse the session's id and carry on from its saved record.
     await attempt(async () => {
@@ -738,6 +757,14 @@ export const register: Register = on => {
 
   on('command.run', { command: 'castle' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase().split(/\s+/).join(' ')
+    if (arg === 'sound on' || arg === 'sound off') {
+      const enable = arg === 'sound on'
+      await $.store.set(SOUND_KEY, enable ? 'on' : 'off')
+      soundOn = enable
+      if (enable) void ringBell($)
+      return { text: enable ? 'The bell will toll when Claude finishes a reply.' : 'The bell is silent. Type /castle sound on to bring it back.' }
+    }
+    if (arg === 'sound') return { text: `The bell is ${(await soundIsOn($)) ? 'on' : 'off'}. Type /castle sound on or /castle sound off.` }
     if (arg === 'reset')
       return {
         text: [
@@ -806,6 +833,8 @@ export const register: Register = on => {
       // Only an answered turn earns XP, counts as finished and marks the day; a cancelled or failed one
       // still counts its lines changed, its cost and its cache.
       const answered = e.reason === 'answer'
+      // The bell tolls when a reply is done, unless muted with /castle sound off.
+      if (answered) void ringBell($)
       mine = answered
         ? {
             ...mine,
@@ -847,7 +876,7 @@ export const register: Register = on => {
     const pct = u?.percent ?? 0
 
     const { Box, Svg } = $.ui.resolve(e)
-    const svg = buildSvg({ usage: u, cache: c, bats, now, prevPercent: shownPercent, mode: 'dark', windowUsd: spent ?? undefined, lastTurn: turn, lines: changed, startedAt: began || undefined, profile: prof, plan: paying })
+    const svg = buildSvg({ usage: u, cache: c, bats, now, prevPercent: shownPercent, mode: 'dark', windowUsd: spent ?? undefined, lastTurn: turn, lines: changed, startedAt: began || undefined, profile: prof, plan: paying, working: e.props.isWorking })
     // The share of the prompt cache's life left, which the fire follows; none without a warm cache.
     const cacheLeft = c ? (c.at + (c.ttlMs ?? CACHE_TTL_MS) - now) / (c.ttlMs ?? CACHE_TTL_MS) : null
     const castle = castleSvg(pct, cacheLeft !== null && cacheLeft > 0 ? cacheLeft : null)

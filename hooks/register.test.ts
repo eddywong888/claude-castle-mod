@@ -391,3 +391,38 @@ test('on a five-minute cache every fire stage shows', async ($, on) => {
   }
   expect([...seen].sort()).toEqual(['big', 'medium', 'small'])
 })
+
+test('the bell tolls when a reply is done, and /castle sound off silences it', async ($, on) => {
+  const { clock } = world(on)
+  const played: unknown[] = []
+  on('audio.play', (_$, e) => {
+    played.push(e.clip)
+    return { value: undefined }
+  })
+  await $.session.start(start as never)
+  const usage = { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 500, model: 'm' }
+  const reply = (id: string, reason = 'answer') => $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: reason === 'aborted', turnId: id, reason, usage } as never)
+  await reply('t1')
+  await clock.settle()
+  expect(played).toEqual([{ asset: 'sounds/done.wav' }])
+  await reply('t2', 'aborted') // an interrupted turn stays quiet
+  await clock.settle()
+  expect(played.length).toBe(1)
+  await $.command.run({ command: 'castle', args: 'sound off' } as never)
+  await reply('t3')
+  await clock.settle()
+  expect(played.length).toBe(1)
+})
+
+test('a bat flies beside the level while Claude works', async ($, on) => {
+  const { clock } = world(on)
+  on('tool.call', () => ({ result: {} }) as never)
+  await $.session.start(start as never)
+  await $.tool.call({ tool: 'Bash', command: 'npm test' } as never)
+  await clock.advance(15_000)
+  const props = { hasSurvey: false, isWorking: true, maxRows: 12, bodyColumns: 120 }
+  const ui = await $.ui.mount({ plugin: 'castle-hud', surface: 'desktop', component: 'AbovePrompt', props } as never)
+  expect(JSON.stringify(await ui.drawn())).toContain('Claude is working')
+  await ui.unmount()
+  expect(await band($ as never)).toContain('Waiting for you')
+})

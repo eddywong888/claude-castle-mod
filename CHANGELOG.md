@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.0
+
+- A bell tolls under a short organ chord when Claude finishes a reply: an original sound. `/castle sound off` silences it, `/castle sound on` brings it back.
+- Beside the level, a bat flies along a track while Claude works and rests when it's your turn.
+- The README's opening line describes the castle as it now behaves.
+
 ## 0.10.1
 
 - Vampire Hunter and Lord of the Castle show pixel portraits: a hunter in a red headband, and a pale vampire lord with red eyes and a high red collar.

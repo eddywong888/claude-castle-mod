@@ -1,6 +1,6 @@
 # Claude Castle Mod
 
-A Castlevania-style HUD for Claude Code. It sits above the prompt and shows what a session is using as it goes: the context window, the rate limits, the prompt cache, the cost and the subagents. A castle on the right catches fire as the context fills up.
+A Castlevania-style HUD for Claude Code. It sits above the prompt and shows what a session is using as it goes: the context window, the rate limits, the prompt cache, the cost and the subagents. A castle on the right grows bolder as the context fills and catches fire as the prompt cache runs down.
 
 ![The HUD above the prompt](screenshots/busy.png)
 
@@ -43,6 +43,7 @@ If the HUD doesn't change after the reload, restart Claude Code. Restart any oth
 | <img src="screenshots/icons/dagger.svg" height="22" alt=""> | **Dagger** | How long the last reply took and how many tokens it wrote. |
 | <img src="screenshots/icons/scroll.svg" height="22" alt=""> | **Scroll** | Lines added and removed by Claude's Edit and Write tools in this conversation. |
 | <img src="screenshots/icons/bat.svg" height="22" alt=""> | **Bats** | One flapping bat per subagent running now. |
+| <img src="screenshots/icons/bat.svg" height="22" alt=""> | **Working bat** | Beside the level, a bat flies along a track while Claude works, and rests when it's your turn. |
 | <img src="screenshots/icons/crest.svg" height="22" alt=""> | **Title icon** | Your level, title, XP toward the next level and your daily streak. The icon changes with your title. |
 
 ### The castle burns as the cache runs down
@@ -78,6 +79,8 @@ Each level needs a little more XP than the last. Titles change at level 1 (Wande
 
 Your **streak** counts the days in a row with at least one finished turn. There are 14 **achievements**, from First Blood (your first turn) to Eternal Night (a 30-day streak). A pop-up appears for each level-up and each new achievement.
 
+When Claude finishes a reply, a deep bell tolls under a short organ chord (an original sound made for this mod). Type `/castle sound off` to silence it and `/castle sound on` to bring it back; the choice is remembered. On macOS it plays through the system's audio player.
+
 Type `/castle` to see your level, where your XP came from and every achievement. Type `/castle reset` to start again from level 1: it asks you to confirm, then deletes everything the mod saved.
 
 ## Good to know
@@ -104,9 +107,9 @@ The mod only reads what Claude Code reports. It never blocks, changes or rewrite
 | `classic.PostModelSwitch` | After `/model`, starts the cache stopwatch again and notes how long the new cache lasts |
 | `session.measure` | Reads the context, rate limits and cost after each turn |
 | `tool.call` | After Edit or Write succeeds, counts the lines changed. After a Bash test command passes, adds XP. Always passes the call through unchanged |
-| `command.run` | Answers `/castle` with your level and achievements, and `/castle reset` |
+| `command.run` | Answers `/castle` with your level and achievements, `/castle sound on|off` and `/castle reset` |
 | `agent.spawn` | Notes a new subagent for the bat count. The subagent starts unchanged |
-| `turn.complete` | Records the last turn's time, output tokens, cache use and XP. The answer is unchanged |
+| `turn.complete` | Records the last turn's time, output tokens, cache use and XP, and tolls the bell after a reply. The answer is unchanged |
 | `ui.render` | Draws the HUD above the prompt |
 
 ## Development

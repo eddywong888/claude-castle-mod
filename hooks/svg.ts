@@ -10,7 +10,7 @@ export type Mode = 'light' | 'dark' | 'auto'
 /** How the account pays: a subscription has rate limits and no bill per token; the API, the other way round. */
 export type Plan = 'subscription' | 'api'
 
-export type Hud = { usage: Usage | null; cache: Cache | null; bats: number; now: number; prevPercent: number; mode: Mode; windowUsd?: number; lastTurn?: LastTurn | null; lines?: Lines; startedAt?: number; profile?: Profile | null; plan?: Plan }
+export type Hud = { usage: Usage | null; cache: Cache | null; bats: number; now: number; prevPercent: number; mode: Mode; windowUsd?: number; lastTurn?: LastTurn | null; lines?: Lines; startedAt?: number; profile?: Profile | null; plan?: Plan; working?: boolean }
 
 /** The HUD is laid out at 23px values; drawn at this scale, values come out at 14px. */
 export const SCALE = 14 / 23
@@ -293,6 +293,22 @@ ${sprite(BAG, { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', T
     alt.push(`Level ${p.level}, ${p.title}, ${xpText}`)
   }
 
+  // Working: beside the level, a bat flies along a track while Claude works, and rests at its start when idle.
+  if (h.profile) {
+    const track = 96
+    const working = h.working === true
+    const fill = { X: working ? 'var(--ink)' : 'var(--stone)' }
+    const bat = working
+      ? `<g class="fly"><g class="up">${sprite(BAT_UP, fill, 0, 12, 2.5)}</g><g class="down">${sprite(BAT_DOWN, fill, 0, 12, 2.5)}</g></g>`
+      : `<g opacity=".45">${sprite(BAT_UP, fill, 0, 12, 2.5)}</g>`
+    const caption = working ? 'Claude is working' : 'waiting for you'
+    sections.push({
+      width: Math.max(track, caption.length * CAPTION_W),
+      body: x => `<g transform="translate(${x} 0)"><rect x="0" y="32" width="${track}" height="3" fill="var(--track)"/>${working ? `<rect class="trail" x="0" y="32" width="${track}" height="3" fill="var(--gold)"/>` : ''}${bat}<text x="0" y="50" class="c">${caption}</text></g>`,
+    })
+    alt.push(working ? 'Claude is working' : 'Waiting for you')
+  }
+
   // One image per section, so the band wraps them to its width instead of shrinking one wide image.
   const PAD = 22 // left inset of every section, so wrapped rows line up
   const GAP = 18 // right space; with the next inset, 40 between sections (24px drawn)
@@ -310,7 +326,10 @@ rect{shape-rendering:crispEdges}
 @keyframes flapA{0%,49.9%{opacity:1}50%,100%{opacity:0}}
 @keyframes flapB{0%,49.9%{opacity:0}50%,100%{opacity:1}}
 .up{animation:flapA .36s steps(1) infinite}.down{opacity:0;animation:flapB .36s steps(1) infinite}
-@media (prefers-reduced-motion:reduce){.drip{animation:none}.up{animation:none}.down{animation:none;opacity:0}}
+@keyframes fly{0%{transform:translateX(0)}50%{transform:translateX(71px)}100%{transform:translateX(0)}}
+@keyframes trail{0%{opacity:.15}50%{opacity:.6}100%{opacity:.15}}
+.fly{animation:fly 2.4s ease-in-out infinite}.trail{animation:trail 2.4s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.drip{animation:none}.up{animation:none}.down{animation:none;opacity:0}.fly{animation:none}.trail{animation:none}}
 </style>`
 
   const parts = sections.map((sec, i) => {
