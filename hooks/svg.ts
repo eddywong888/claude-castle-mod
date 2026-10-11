@@ -44,16 +44,16 @@ const RESET_LABEL: Record<string, string> = { five_hour: '5hr', seven_day: '7d' 
 const DAGGER = ['..X..', '..X..', '.XWX.', '.XWX.', '.XWX.', '.XWX.', 'BBBBB', '..B..', '..B..']
 const SCROLL = ['.XXXXXXX.', 'XWWWWWWWX', '.WLLLLLW.', '.WWWWWWW.', '.WLLLLW..', '.WWWWWWW.', 'XWWWWWWWX', '.XXXXXXX.']
 
-/** One icon per title, shown in the level section: a lantern, a stake, the crest, a whip, a crescent moon, a crown. */
+/** One icon per title, shown in the level section: a lantern, the hunter's portrait, the crest, a whip, a crescent moon, the vampire lord's portrait. */
 export const TITLE_ICONS: Record<string, string[]> = {
   Wanderer: ['...ss....', '..s..s...', '.XXXXXXX.', '.XGYYYGX.', '.XGYOYGX.', '.XGYYYGX.', '.XXXXXXX.', '..XXXXX..', '.........'],
-  'Vampire Hunter': ['....S....', '....S....', '..SSSSS..', '....S....', '....S....', '....B....', '....B....', '....b....', '....b....'],
+  'Vampire Hunter': ['..bBBBBb..', '.bBBBBBBb.', 'bBBBBBBBBb', 'bRRRRRRRRb', 'bBFFFFFFBb', '.BFkFFkFB.', '.bFFFFFFb.', '..FFffFF..', '.SSbFFbSS.', 'SSBBbbBBSS'],
   'Belmont Heir': ['XXXXXXXX', 'XGGGGGGX', 'XGGRRGGX', 'XGRRRRGX', 'XGGRRGGX', '.XGRRGX.', '.XGGGGX.', '..XGGX..', '...XX...'],
   'Whip Master': ['...BBBB..', '..B....B.', '.B..BB..B', '.B.B..B.B', '.B..BB.B.', '..B...B..', '...BBB...', '..XX.....', '.XX......'],
   'Night Stalker': ['...WWW...', '..WWK....', '.WWK..R..', '.WWK.....', '.WWK..R..', '.WWK.....', '..WWK....', '...WWW...', '.........'],
-  'Lord of the Castle': ['X...X...X', 'XX.XYX.XX', 'XGXGRGXGX', 'XGGGGGGGX', 'XGRGHGRGX', 'XGGGGGGGX', 'XXXXXXXXX', '.........', '.........'],
+  'Lord of the Castle': ['..kkkkkk..', '.kkkkkkkk.', '.kkkppkkk.', '.kpppppkk.', 'CkpeppepkC', 'CCppppppCC', 'CRCpWWpCRC', 'CRRCppCRRC', 'CRRRGGRRRC', 'CCRRRRRRCC'],
 }
-const ICON_COLORS = { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', R: 'var(--blood)', Y: '#ffd84a', O: '#ff8a1f', S: '#c9c3d1', s: 'var(--stone)', B: '#8a5a2b', b: '#5e3b1a', W: 'var(--lit)', K: '#2a2133' }
+const ICON_COLORS = { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', R: 'var(--blood)', Y: '#ffd84a', O: '#ff8a1f', S: '#c9c3d1', s: 'var(--stone)', B: '#8a5a2b', b: '#5e3b1a', W: 'var(--lit)', K: '#2a2133', F: '#e8c39e', f: '#c79a74', k: '#14101a', p: '#d9d4e6', e: '#ff3b3b', C: '#8b1a2b' }
 
 const CREST = ['XXXXXXXX', 'XGGGGGGX', 'XGGRRGGX', 'XGRRRRGX', 'XGGRRGGX', '.XGRRGX.', '.XGGGGX.', '..XGGX..', '...XX...']
 

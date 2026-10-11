@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.1
+
+- Vampire Hunter and Lord of the Castle show pixel portraits: a hunter in a red headband, and a pale vampire lord with red eyes and a high red collar.
+
 ## 0.10.0
 
 - Each title has its own icon in the level section: a lantern (Wanderer), a stake (Vampire Hunter), the crest (Belmont Heir), a whip (Whip Master), a crescent moon (Night Stalker) and a crown (Lord of the Castle).

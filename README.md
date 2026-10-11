@@ -72,7 +72,7 @@ On a narrow window the sections wrap onto more rows, each at full size. The cast
 | Run tests that pass (npm, pnpm, yarn or bun test, pytest, jest, vitest, go test, cargo test and others) | +25 |
 | A subagent finishes | +15 |
 
-Each level needs a little more XP than the last. Titles change at level 1 (Wanderer), 5 (Vampire Hunter), 10 (Belmont Heir), 20 (Whip Master), 35 (Night Stalker) and 50 (Lord of the Castle), and each title has its own icon: a lantern, a stake, the crest, a whip, a crescent moon and a crown.
+Each level needs a little more XP than the last. Titles change at level 1 (Wanderer), 5 (Vampire Hunter), 10 (Belmont Heir), 20 (Whip Master), 35 (Night Stalker) and 50 (Lord of the Castle), and each title has its own icon: a lantern, a hunter's portrait, the crest, a whip, a crescent moon and a vampire lord's portrait.
 
 ![The six title icons](screenshots/titles.png)
 

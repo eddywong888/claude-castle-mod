@@ -177,4 +177,5 @@ test('every title has its own icon in the level section', () => {
   const crown = buildSvg({ usage: null, cache: null, bats: 0, now, prevPercent: 0, mode: 'dark', profile: { level: 50, title: 'Lord of the Castle', into: 0, need: 9000, xp: 99999, streak: 0, unlocked: [] } }).source
   expect(lantern).toContain('#ff8a1f') // the lantern's flame
   expect(crown).not.toContain('#ff8a1f')
+  expect(crown).toContain('#ff3b3b') // the vampire lord's red eyes
 })
