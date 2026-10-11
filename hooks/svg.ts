@@ -394,8 +394,8 @@ function flame(size: 'small' | 'medium' | 'big', cx: number, baseY: number, dela
   return `<g class="fa" ${style}>${sprite(rows, FIRE, x, y, px)}</g><g class="fb" ${style}>${sprite(mirrored, FIRE, x, y, px)}</g>`
 }
 
-// The stone knight that guards the castle once the context reaches 80%.
-const STATUE = ['...DD...', '..DSSD..', '..SEES..', '..DSSD..', '.DSSSSD.', 'DSSHHSSD', 'DS.HH.SD', 'D.SHHS.D', '..SHHS..', '..SHHS..', '..S..S..', '..S..S..', '.PPPPPP.', 'PPPPPPPP']
+// The stone gargoyle that perches on the keep once the context reaches 80%: horns, spread wings, red eyes, claws.
+const GARGOYLE = ['D........D', 'DD.S..S.DD', 'DDDSSSSDDD', 'DDSESSESDD', '.DDSSSSDD.', '..DSHHSD..', '..SSHHSS..', '.SS.SS.SS.']
 
 /** The castle's tiers, one per stage of the context. */
 export const MAX_TIER = 4
@@ -403,7 +403,7 @@ export const MAX_TIER = 4
 /**
  * The castle on the right edge of the band: three towers and the keep, lit windows, a few stars. It grows
  * bolder as the context fills (banners at 40%; more lit windows, a gold trim and a taller main spire at 60%; a
- * gold crest, brighter stone, a soft glow and a stone knight statue at 80%) and burns as the prompt cache runs down.
+ * gold crest, brighter stone, a soft glow and a stone gargoyle on the keep at 80%) and burns as the prompt cache runs down.
  */
 export function castleSvg(percent = 0, cacheLeft: number | null = null): { source: string; alt: string; width: number; height: number } {
   const DY = 20 // room above the towers for the flames
@@ -439,9 +439,8 @@ export function castleSvg(percent = 0, cacheLeft: number | null = null): { sourc
     `<rect x="${cx}" y="${tipY - 9}" width="1" height="9" fill="#8e8597"/><rect x="${cx + 1}" y="${tipY - 9}" width="6" height="4" fill="#c8283f"/><rect x="${cx + 1}" y="${tipY - 9}" width="6" height="1" fill="#d4a017"/>`
   const banners = has(BANNERS) ? banner(41, 12) + banner(153, 10) : ''
   const trim = has(TRIM) ? `<rect x="0" y="38" width="240" height="1" fill="#d4a017" opacity=".55"/>` : ''
-  // At 80% a stone knight stands guard on the wall at the right end, beyond the keep: hooded, a sword held point
-  // down before it, on a plinth, with a faint red glint for eyes.
-  const statue = has(CREST) ? sprite(STATUE, { S: '#8e8597', H: '#b9b2c4', D: '#5b5368', E: '#c8283f', P: '#6b6378' }, 224.5, 35 - STATUE.length * 1.5, 1.5) : ''
+  // At 80% a stone gargoyle perches on the keep's battlements, wings spread, its eyes a faint red glint.
+  const statue = has(CREST) ? sprite(GARGOYLE, { S: '#8e8597', H: '#b9b2c4', D: '#5b5368', E: '#c8283f' }, 209 - (GARGOYLE[0]?.length ?? 0) * 0.75, 27 - GARGOYLE.length * 1.5, 1.5) : ''
   const crest = has(CREST) ? `<polygon points="96,${mainTip - 8} 99,${mainTip - 4} 96,${mainTip} 93,${mainTip - 4}" fill="#d4a017"/><rect x="95" y="${mainTip - 6}" width="2" height="4" fill="#fff3c4"/>` : ''
 
   const fire = fireLevel(cacheLeft)

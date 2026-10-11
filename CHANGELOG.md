@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.7
+
+- The 80% statue is now a stone gargoyle perched on the keep's battlements, with spread wings and red eyes.
+
 ## 0.11.6
 
 - At 80% context a stone knight statue stands guard on the castle wall at the right.

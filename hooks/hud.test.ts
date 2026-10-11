@@ -149,7 +149,7 @@ test('castle grows bolder as the context fills, keeping all its towers', () => {
   expect(castleSvg(60).source).toContain('96,-6') // taller main spire
   expect(spires(80)).toBe(4) // and the crest
   expect(castleSvg(80).alt).toContain('tier 4 of 4')
-  expect(castleSvg(80).source).toContain('#b9b2c4') // the stone knight
+  expect(castleSvg(80).source).toContain('#b9b2c4') // the stone gargoyle
   expect(castleSvg(79).source).not.toContain('#b9b2c4')
 })
 

@@ -54,7 +54,7 @@ The fire follows the prompt cache. A small fire starts when 40% of the cache's l
 
 ### The castle grows as the context fills
 
-The castle always has its three towers and the keep, and grows bolder as the context fills: banners at 40%, more lit windows, a gold trim and a taller main spire at 60%, and at 80% a gold crest, brighter stone, a soft golden glow and a stone knight statue standing guard on the wall at the right. A compaction shrinks the context, so the castle steps back down with it.
+The castle always has its three towers and the keep, and grows bolder as the context fills: banners at 40%, more lit windows, a gold trim and a taller main spire at 60%, and at 80% a gold crest, brighter stone, a soft golden glow and a stone gargoyle perched on the keep. A compaction shrinks the context, so the castle steps back down with it.
 
 ![The castle at 20%, 40%, 60% and 80% context](screenshots/tiers.png)
 
