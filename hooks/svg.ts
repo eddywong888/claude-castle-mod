@@ -394,8 +394,9 @@ function flame(size: 'small' | 'medium' | 'big', cx: number, baseY: number, dela
   return `<g class="fa" ${style}>${sprite(rows, FIRE, x, y, px)}</g><g class="fb" ${style}>${sprite(mirrored, FIRE, x, y, px)}</g>`
 }
 
-// The stone gargoyle that perches on the keep once the context reaches 80%: horns, spread wings, red eyes, claws.
-const GARGOYLE = ['D........D', 'DD.S..S.DD', 'DDDSSSSDDD', 'DDSESSESDD', '.DDSSSSDD.', '..DSHHSD..', '..SSHHSS..', '.SS.SS.SS.']
+// The stone gargoyle that perches on the keep once the context reaches 80%, wings flung wide as if about to take
+// off: horns, red eyes, claws.
+const GARGOYLE = ['D............D', 'DD..........DD', 'DDD..S..S..DDD', 'DDDD.SSSS.DDDD', '.DDDDSESEDDDD.', '..DDDSSSSDDD..', '...DDSHHSDD...', '.....SHHS.....', '....SS..SS....', '...SSS..SSS...']
 
 /** The castle's tiers, one per stage of the context. */
 export const MAX_TIER = 4

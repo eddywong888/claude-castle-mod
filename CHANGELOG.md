@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.8
+
+- The gargoyle on the keep spreads its wings wide, as if about to take off.
+
 ## 0.11.7
 
 - The 80% statue is now a stone gargoyle perched on the keep's battlements, with spread wings and red eyes.
