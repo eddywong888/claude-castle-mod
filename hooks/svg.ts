@@ -394,13 +394,16 @@ function flame(size: 'small' | 'medium' | 'big', cx: number, baseY: number, dela
   return `<g class="fa" ${style}>${sprite(rows, FIRE, x, y, px)}</g><g class="fb" ${style}>${sprite(mirrored, FIRE, x, y, px)}</g>`
 }
 
+// The stone knight that guards the castle once the context reaches 80%.
+const STATUE = ['...DD...', '..DSSD..', '..SEES..', '..DSSD..', '.DSSSSD.', 'DSSHHSSD', 'DS.HH.SD', 'D.SHHS.D', '..SHHS..', '..SHHS..', '..S..S..', '..S..S..', '.PPPPPP.', 'PPPPPPPP']
+
 /** The castle's tiers, one per stage of the context. */
 export const MAX_TIER = 4
 
 /**
  * The castle on the right edge of the band: three towers and the keep, lit windows, a few stars. It grows
  * bolder as the context fills (banners at 40%; more lit windows, a gold trim and a taller main spire at 60%; a
- * gold crest, brighter stone and a soft glow at 80%) and burns as the prompt cache runs down.
+ * gold crest, brighter stone, a soft glow and a stone knight statue at 80%) and burns as the prompt cache runs down.
  */
 export function castleSvg(percent = 0, cacheLeft: number | null = null): { source: string; alt: string; width: number; height: number } {
   const DY = 20 // room above the towers for the flames
@@ -436,6 +439,9 @@ export function castleSvg(percent = 0, cacheLeft: number | null = null): { sourc
     `<rect x="${cx}" y="${tipY - 9}" width="1" height="9" fill="#8e8597"/><rect x="${cx + 1}" y="${tipY - 9}" width="6" height="4" fill="#c8283f"/><rect x="${cx + 1}" y="${tipY - 9}" width="6" height="1" fill="#d4a017"/>`
   const banners = has(BANNERS) ? banner(41, 12) + banner(153, 10) : ''
   const trim = has(TRIM) ? `<rect x="0" y="38" width="240" height="1" fill="#d4a017" opacity=".55"/>` : ''
+  // At 80% a stone knight stands guard on the wall at the right end, beyond the keep: hooded, a sword held point
+  // down before it, on a plinth, with a faint red glint for eyes.
+  const statue = has(CREST) ? sprite(STATUE, { S: '#8e8597', H: '#b9b2c4', D: '#5b5368', E: '#c8283f', P: '#6b6378' }, 224.5, 35 - STATUE.length * 1.5, 1.5) : ''
   const crest = has(CREST) ? `<polygon points="96,${mainTip - 8} 99,${mainTip - 4} 96,${mainTip} 93,${mainTip - 4}" fill="#d4a017"/><rect x="95" y="${mainTip - 6}" width="2" height="4" fill="#fff3c4"/>` : ''
 
   const fire = fireLevel(cacheLeft)
@@ -467,7 +473,7 @@ export function castleSvg(percent = 0, cacheLeft: number | null = null): { sourc
       : ''
   const style = `<style>.fa{animation:fa .3s steps(1) infinite}.fb{opacity:0;animation:fb .3s steps(1) infinite}@keyframes fa{0%,49.9%{opacity:1}50%,100%{opacity:0}}@keyframes fb{0%,49.9%{opacity:0}50%,100%{opacity:1}}@media (prefers-reduced-motion:reduce){.fa{animation:none}.fb{animation:none;opacity:0}}rect{shape-rendering:crispEdges}</style>`
   const H = 60 + DY
-  const source = `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(240 * CASTLE_SCALE)}" height="${Math.round(H * CASTLE_SCALE)}" viewBox="0 0 240 ${H}">${style}${glow}${stars}<g transform="translate(0 ${DY + 8})"><g fill="${stone}" shape-rendering="crispEdges">${wall}${shapes}</g>${trim}${banners}${crest}${windows}${flames}</g></svg>`
+  const source = `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(240 * CASTLE_SCALE)}" height="${Math.round(H * CASTLE_SCALE)}" viewBox="0 0 240 ${H}">${style}${glow}${stars}<g transform="translate(0 ${DY + 8})"><g fill="${stone}" shape-rendering="crispEdges">${wall}${shapes}</g>${trim}${banners}${crest}${statue}${windows}${flames}</g></svg>`
   const left = cacheLeft === null ? 0 : Math.round(cacheLeft * 100)
   const alt = `Castle, tier ${t} of ${MAX_TIER} at ${percent}% context` + (fire === 'none' ? '' : `, on fire (${fire}): ${left}% of the cache left`)
 

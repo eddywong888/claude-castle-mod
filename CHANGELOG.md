@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.6
+
+- At 80% context a stone knight statue stands guard on the castle wall at the right.
+
 ## 0.11.5
 
 - Fixed: the bell hadn't rung since 0.11.2. It now rings whenever a desktop app window shows the session, checked at each reply.
