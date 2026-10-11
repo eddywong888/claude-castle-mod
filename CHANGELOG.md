@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.4
+
+- The thrown cross's shadow tail glows blue.
+
 ## 0.11.3
 
 - The working bar is as long as its caption, with space between them, and the thrown cross trails a fading shadow tail.

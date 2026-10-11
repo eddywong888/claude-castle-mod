@@ -308,11 +308,11 @@ ${sprite(BAG, { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', T
     const working = h.working === true
     const fill = working ? { X: 'var(--goldDark)', S: '#e6e1ec' } : { X: 'var(--track)', S: 'var(--stone)' }
     const Y = 6
-    // A shadow tail: two fainter crosses following the thrown one a moment behind.
+    // A shadow tail: two fainter blue crosses following the thrown one a moment behind, like a holy afterglow.
     const ghost = (delay: number, opacity: number) =>
-      `<g class="throw" style="animation-delay:${delay}s" opacity="${opacity}">${sprite(CROSS_A, { X: 'var(--goldDark)', S: 'var(--gold)' }, 0, Y, CROSS_PX)}</g>`
+      `<g class="throw" style="animation-delay:${delay}s" opacity="${opacity}">${sprite(CROSS_A, { X: '#1f4e8c', S: '#5aa9ff' }, 0, Y, CROSS_PX)}</g>`
     const cross = working
-      ? ghost(0.14, 0.18) + ghost(0.07, 0.38) + `<g class="throw"><g class="spinA">${sprite(CROSS_A, fill, 0, Y, CROSS_PX)}</g><g class="spinB">${sprite(CROSS_B, fill, 0, Y, CROSS_PX)}</g></g>`
+      ? ghost(0.14, 0.25) + ghost(0.07, 0.5) + `<g class="throw"><g class="spinA">${sprite(CROSS_A, fill, 0, Y, CROSS_PX)}</g><g class="spinB">${sprite(CROSS_B, fill, 0, Y, CROSS_PX)}</g></g>`
       : sprite(CROSS_A, fill, 0, Y, CROSS_PX)
     const caption = working ? 'Claude is working' : 'waiting for you'
     sections.push({
