@@ -138,6 +138,10 @@ claude plugin test .
 
 The screenshots and icons are renders of the mod's own drawing code with sample numbers.
 
+## Fonts
+
+The level line is lettered in two fonts under the SIL Open Font License 1.1: Pirata One by Rodrigo Fuenzalida and Nicolas Massi, with Cinzel Decorative by Natanael Gama as its fallback. The mod carries trimmed copies, renamed CastleHud Gothic and CastleHud Capitals as their licences require, with the licence texts and the build script in `fonts/`.
+
 ## License
 
 [MIT](LICENSE)

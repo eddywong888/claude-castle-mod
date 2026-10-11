@@ -187,3 +187,12 @@ test('the working cross shows without a profile, and lands at the end of its tra
   expect(svg.alt).toContain('Claude is working')
   expect(svg.source).toContain('translateX(131.8px)') // 150 minus the 18.2 the cross is wide
 })
+
+test('the level line carries its own gothic fonts, and only that image does', () => {
+  const svg = buildSvg({ usage: null, cache: null, bats: 0, now, prevPercent: 0, mode: 'dark', profile: { level: 5, title: 'Vampire Hunter', into: 0, need: 667, xp: 1600, streak: 0, unlocked: [] } })
+  const withFonts = svg.parts.filter(p => p.source.includes("font-family:'CastleHud Gothic'"))
+  expect(withFonts.length).toBe(1)
+  expect(withFonts[0]!.alt).toContain('Vampire Hunter')
+  expect(withFonts[0]!.source).toContain("'CastleHud Capitals'") // the fallback
+  for (const p of svg.parts) expect(p.source.length).toBeLessThan(131_072)
+})

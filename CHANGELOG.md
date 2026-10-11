@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.0
+
+- The level line ("LV 5 Vampire Hunter") is lettered in a gothic blackletter, with carved fantasy capitals as its fallback. Both are open-licensed fonts, trimmed and built into that image; numbers and captions keep the serif.
+
 ## 0.11.9
 
 - The cache setting reaches every open window within a refresh, and a conversation restored after a restart or `/resume` counts down with it.
