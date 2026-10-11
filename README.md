@@ -79,13 +79,15 @@ Each level needs a little more XP than the last. Titles change at level 1 (Wande
 
 Your **streak** counts the days in a row with at least one finished turn. There are 14 **achievements**, from First Blood (your first turn) to Eternal Night (a 30-day streak). A pop-up appears for each level-up and each new achievement.
 
-When Claude finishes a reply, a deep bell tolls under a short organ chord (an original sound made for this mod). Type `/castle sound off` to silence it and `/castle sound on` to bring it back; the choice is remembered. It rings in the desktop app only, not in a terminal or a scripted run, and muting it in one window mutes every window. `/castle reset` keeps your choice.
+When Claude finishes a reply, a deep bell tolls under a short organ chord (an original sound made for this mod). Type `/castle sound off` to silence it and `/castle sound on` to bring it back; the choice is remembered. It rings only while a desktop app window shows the session, not in a terminal or a scripted run, and muting it in one window mutes every window. `/castle reset` keeps your choice.
+
+Type `/castle cache 5m` if your prompt cache lasts five minutes (see *Cache life* below).
 
 Type `/castle` to see your level, where your XP came from and every achievement. Type `/castle reset` to start again from level 1: it asks you to confirm, then deletes everything the mod saved.
 
 ## Good to know
 
-- **Cache life.** The stopwatch counts down one hour from each reply, the life of Claude Code's prompt cache. A reply counts as warm when it comes within that hour. If you switch model and Claude Code reports a five-minute cache, it counts down five minutes instead. A compaction or a model switch starts the stopwatch again.
+- **Cache life.** Claude Code's prompt cache lasts either one hour or five minutes, depending on your account and model. The stopwatch counts down one hour from each reply unless you tell it otherwise. If your cache lasts five minutes, type `/castle cache 5m`; `/castle cache 1h` switches back, and `/castle cache` shows the current setting. The setting is remembered across sessions and kept by `/castle reset`. Claude Code reports the real cache life only when you switch model with `/model`, and the mod then updates the setting to match. A reply counts as warm when it comes within the cache's life, and the castle's fire follows the same countdown. A compaction or a model switch starts the stopwatch again.
 - **Subscription or API.** On a Claude subscription the band shows the moons and leaves out the coin and money bag, since you aren't billed per token. With an API key, or through a third-party provider, it shows the costs and leaves out the moons, which only a subscription has. Until the mod can tell, it shows both.
 - **The 5-hour total** counts only sessions running this mod, from when it was installed. Usage on claude.ai or in other tools isn't included.
 - **Lines changed** counts only Claude's Edit and Write tools. Files changed by shell commands such as `sed` or `git` aren't counted.
@@ -107,7 +109,7 @@ The mod only reads what Claude Code reports. It never blocks, changes or rewrite
 | `classic.PostModelSwitch` | After `/model`, starts the cache stopwatch again and notes how long the new cache lasts |
 | `session.measure` | Reads the context, rate limits and cost after each turn |
 | `tool.call` | After Edit or Write succeeds, counts the lines changed. After a Bash test command passes, adds XP. Always passes the call through unchanged |
-| `command.run` | Answers `/castle` with your level and achievements, `/castle sound on|off` and `/castle reset` |
+| `command.run` | Answers `/castle` with your level and achievements, `/castle sound on\|off`, `/castle cache 5m\|1h` and `/castle reset` |
 | `agent.spawn` | Notes a new subagent for the bat count. The subagent starts unchanged |
 | `turn.complete` | Records the last turn's time, output tokens, cache use and XP, and tolls the bell after a reply. The answer is unchanged |
 | `ui.render` | Draws the HUD above the prompt |

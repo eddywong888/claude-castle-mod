@@ -87,6 +87,10 @@ let turnLines = 0
 let turnStartedAt = 0
 // How long the prompt cache lasts: an hour, unless a model switch reports otherwise.
 let cacheTtlMs = CACHE_TTL_MS
+// How long the cache lasts, kept across sessions: set with /castle cache 5m|1h, and updated whenever a model switch
+// reports it. Claude Code reports it at no other time.
+const CACHE_TTL_KEY = 'cache:ttl'
+const ttlOf = (v: unknown) => (v === '5m' ? 5 * 60e3 : v === '1h' ? CACHE_TTL_MS : undefined)
 let dirty = false
 // This conversation's own figures (lines changed, last turn, cache), saved under its id so a restart restores them.
 const CONV = 'conv:'
@@ -428,8 +432,8 @@ function resetAll($: EngineInterface): Promise<void> {
 }
 
 async function wipe($: EngineInterface) {
-  // Your bell setting is a preference, not something the mod recorded: it stays.
-  for (const key of await $.store.keys()) if (key !== SOUND_KEY) await $.store.delete(key)
+  // Your bell and cache settings are preferences, not something the mod recorded: they stay.
+  for (const key of await $.store.keys()) if (key !== SOUND_KEY && key !== CACHE_TTL_KEY) await $.store.delete(key)
   mine = emptyStats()
   lastSaved = null
   lastSavedAt = 0
@@ -482,12 +486,10 @@ async function writeConversation($: EngineInterface) {
 
 /** Puts back this conversation's figures as they were last saved: after a restart, or on /resume. */
 async function restoreConversation($: EngineInterface) {
-  const held = await read($, cache)
   // A hot reload keeps the figures it had, which are newer than any saved: leave them, and save them soon,
   // since what changed just before the reload may not be saved yet.
   const changed = await read($, lines)
   if ((await read($, lastTurn)) || changed.added + changed.removed > 0) {
-    if (held?.ttlMs) cacheTtlMs = held.ttlMs
     convDirty = true
     return
   }
@@ -496,8 +498,18 @@ async function restoreConversation($: EngineInterface) {
   await update($, lines, () => saved.lines ?? { added: 0, removed: 0 })
   await update($, lastTurn, () => saved.lastTurn ?? null)
   await update($, cache, () => saved.cache ?? null)
-  // The cache's life, as a model switch last reported it.
-  if (saved.cache?.ttlMs) cacheTtlMs = saved.cache.ttlMs
+}
+
+/** Sets how long the cache lasts, from now on and for the cache already counting down. */
+async function setCacheTtl($: EngineInterface, ttl: '5m' | '1h') {
+  cacheTtlMs = ttlOf(ttl) ?? CACHE_TTL_MS
+  await $.store.set(CACHE_TTL_KEY, ttl)
+  const c = await read($, cache)
+  if (c?.at && c.ttlMs !== cacheTtlMs) {
+    const ttlMs = cacheTtlMs
+    await update($, cache, () => ({ ...c, ttlMs }))
+    convDirty = true
+  }
 }
 
 /** Deletes saved conversations not touched for a month. */
@@ -519,10 +531,9 @@ async function refreshUsage($: EngineInterface) {
 }
 
 // The bell when a reply is done: on unless muted, the choice kept across sessions. Read at each ring, so muting
-// in one window silences every open one. Rung only in the desktop app, where the band is: not in a terminal,
-// nor in a headless or SDK run.
+// in one window silences every open one. Rung only while the desktop app shows the session, where the band is:
+// not in a terminal, nor in a headless or SDK run with no window (the desktop app itself runs headless).
 const SOUND_KEY = 'sound'
-let bellHere = false
 
 async function soundIsOn($: EngineInterface): Promise<boolean> {
   return (await $.store.get(SOUND_KEY)) !== 'off'
@@ -531,7 +542,7 @@ async function soundIsOn($: EngineInterface): Promise<boolean> {
 /** Tolls the bell and organ chord, if the sound is on; a failure to play is silent. */
 async function ringBell($: EngineInterface) {
   try {
-    if (bellHere && (await soundIsOn($))) await $.audio.play({ asset: 'sounds/done.wav' })
+    if ((await $.session.surfaces()).includes('desktop') && (await soundIsOn($))) await $.audio.play({ asset: 'sounds/done.wav' })
   } catch {
     // no player here (a Linux or Windows terminal), or the clip couldn't play
   }
@@ -573,7 +584,6 @@ export const register: Register = on => {
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
-    bellHere = e.surface === 'desktop' && e.isInteractive
     // Each step on its own: one that fails (a store that can't be read, say) leaves the rest running.
     const attempt = async (step: () => Promise<unknown>) => {
       try {
@@ -606,7 +616,7 @@ export const register: Register = on => {
     }
     // The timer first: if anything below fails, the band still keeps time.
     $.clock.every(15_000, () => void refresh())
-    await attempt(() => $.command.register({ name: 'castle', description: 'Show your castle-hud level, streak and achievements', argumentHint: '[sound on|off | reset]' }))
+    await attempt(() => $.command.register({ name: 'castle', description: 'Show your castle-hud level, streak and achievements', argumentHint: '[sound on|off | cache 5m|1h | reset]' }))
     await attempt(() => $.store.delete('ledger')) // the shared list an earlier version kept
     // Keep one XP record per session across reloads: reuse the session's id and carry on from its saved record.
     await attempt(async () => {
@@ -632,6 +642,10 @@ export const register: Register = on => {
       }
     })
     await attempt(() => startOver($))
+    await attempt(async () => {
+      const ttl = ttlOf(await $.store.get(CACHE_TTL_KEY))
+      if (ttl) cacheTtlMs = ttl
+    })
     await attempt(() => pruneConversations($))
     await refresh()
 
@@ -668,7 +682,7 @@ export const register: Register = on => {
   // A model switch leaves the old model's cache behind, and says how long the cache lasts.
   on('classic.PostModelSwitch', async ($, e, next) => {
     const result = await next(e)
-    cacheTtlMs = e.cache_ttl === '5m' ? 5 * 60e3 : CACHE_TTL_MS
+    await setCacheTtl($, e.cache_ttl)
     // A resume restores the conversation's own model: its cache, and the restored stopwatch, stand.
     if (e.source === 'resume') return result
     await update($, cache, () => null)
@@ -765,6 +779,11 @@ export const register: Register = on => {
       if (enable) void ringBell($)
       return { text: enable ? 'The bell will toll when Claude finishes a reply.' : 'The bell is silent. Type /castle sound on to bring it back.' }
     }
+    if (arg === 'cache 5m' || arg === 'cache 1h') {
+      await setCacheTtl($, arg === 'cache 5m' ? '5m' : '1h')
+      return { text: `The cache stopwatch now counts down ${arg === 'cache 5m' ? 'five minutes' : 'an hour'} from each reply.` }
+    }
+    if (arg === 'cache') return { text: `The cache stopwatch counts down ${cacheTtlMs === CACHE_TTL_MS ? 'an hour' : 'five minutes'}. Type /castle cache 5m or /castle cache 1h to change it.` }
     if (arg === 'sound') return { text: `The bell is ${(await soundIsOn($)) ? 'on' : 'off'}. Type /castle sound on or /castle sound off.` }
     if (arg === 'reset')
       return {

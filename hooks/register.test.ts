@@ -10,7 +10,7 @@ const RESET = '2026-10-09T12:00:00Z'
 function world(on: On, entries: Record<string, unknown> = {}) {
   const clock = mock.clock(on, { now: T0 })
   const store = new Map<string, unknown>(Object.entries(entries))
-  const s = { id: 's1', api: false, gateway: false, usd: 0, tokens: undefined as number | undefined, agents: [] as { id: string; status: string }[], toasts: [] as string[] }
+  const s = { surfaces: ['desktop'] as string[], id: 's1', api: false, gateway: false, usd: 0, tokens: undefined as number | undefined, agents: [] as { id: string; status: string }[], toasts: [] as string[] }
   on('store.get', (_$, e) => ({ value: store.get(e.key) }))
   on('store.set', (_$, e) => {
     store.set(e.key, JSON.parse(JSON.stringify(e.value)))
@@ -31,6 +31,7 @@ function world(on: On, entries: Record<string, unknown> = {}) {
   } }))
   on('agent.list', () => ({ value: s.agents }) as never)
   on('session.id', () => ({ value: s.id }))
+  on('session.surfaces', () => ({ value: s.surfaces }) as never)
   on('command.register', () => ({ value: { command: 'castle' } }))
   on('ui.toast', (_$, e) => {
     s.toasts.push(e.text)
@@ -44,7 +45,8 @@ function world(on: On, entries: Record<string, unknown> = {}) {
   return { clock, store, s }
 }
 
-const start = { cwd: '/', surface: 'desktop', isInteractive: true } as const
+// The desktop app's session starts headless, as Claude Code really starts it; the window shows in surfaces().
+const start = { cwd: '/', surface: null, isInteractive: false } as const
 const spendTotal = (store: Map<string, unknown>) => [...store].filter(([k]) => /^spend:\d+:/.test(k)).reduce((sum, [, v]) => sum + Number(v), 0)
 const xpRecord = (store: Map<string, unknown>) => [...store].find(([k]) => k.startsWith('xp:'))?.[1] as Stats | undefined
 const measure = (usd: number) => ({ context: { tokens: 1000, window: 200_000, percent: 1 }, rateLimits: [{ kind: 'five_hour', percentUsed: 1, resetsAt: RESET }], cost: { usd }, changed: ['cost'] }) as never
@@ -438,10 +440,14 @@ const listen = (on: On) => {
 const answered = (id: string) => ({ answer: 'ok', durationMs: 1, isAborted: false, turnId: id, reason: 'answer' }) as never
 
 test('the bell stays quiet in a terminal or headless session', async ($, on) => {
-  const { clock } = world(on)
+  const { clock, s } = world(on)
   const played = listen(on)
+  s.surfaces = ['terminal']
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true } as never)
   await $.turn.complete(answered('t1'))
+  await clock.settle()
+  s.surfaces = [] // a -p run: no window at all
+  await $.turn.complete(answered('t2'))
   await clock.settle()
   expect(played.length).toBe(0)
 })
@@ -459,4 +465,20 @@ test('muting in another window silences this one, a reply without usage still ri
   expect(played.length).toBe(1)
   await $.command.run({ command: 'castle', args: 'reset confirm' } as never)
   expect(store.get('sound')).toBe('off')
+})
+
+test('/castle cache 5m sets the stopwatch, keeps it across sessions and through a reset', async ($, on) => {
+  const { clock, store } = world(on)
+  await $.session.start(start as never)
+  await $.turn.start({ text: 'hi', turnId: 't1' } as never)
+  const usage = { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 500, model: 'm' }
+  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer', usage } as never)
+  const set = (await $.command.run({ command: 'castle', args: 'cache 5m' } as never)) as { text: string }
+  expect(set.text).toContain('five minutes')
+  expect(store.get('cache:ttl')).toBe('5m')
+  // The cache already counting down follows at once: 4 minutes in, a quarter of its life left, so it burns.
+  await clock.advance(4 * 60e3)
+  expect(await band($ as never)).toContain('on fire')
+  await $.command.run({ command: 'castle', args: 'reset confirm' } as never)
+  expect(store.get('cache:ttl')).toBe('5m')
 })

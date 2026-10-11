@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.5
+
+- Fixed: the bell hadn't rung since 0.11.2. It now rings whenever a desktop app window shows the session, checked at each reply.
+- `/castle cache 5m` or `/castle cache 1h` sets how long the cache stopwatch counts down, for accounts whose prompt cache lasts five minutes. It's remembered, kept by `/castle reset`, and updated when a model switch reports the real cache life.
+- The README's hook table renders correctly on GitHub.
+
 ## 0.11.4
 
 - The thrown cross's shadow tail glows blue.
