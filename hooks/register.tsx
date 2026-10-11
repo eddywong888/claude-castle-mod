@@ -516,9 +516,9 @@ async function followCacheTtl($: EngineInterface) {
 async function applyCacheTtl($: EngineInterface, ttl: number) {
   cacheTtlMs = ttl
   const c = await read($, cache)
-  if (c?.at && c.ttlMs !== cacheTtlMs) {
-    const ttlMs = cacheTtlMs
-    await update($, cache, () => ({ ...c, ttlMs }))
+  if (c?.at && c.ttlMs !== ttl) {
+    // Applied to the cache as it stands when written, not as read: a reply may have replaced it meanwhile.
+    await update($, cache, p => (p?.at ? { ...p, ttlMs: ttl } : p))
     convDirty = true
   }
 }
@@ -809,7 +809,7 @@ export const register: Register = on => {
       }
     if (arg === 'reset confirm') {
       await resetAll($)
-      return { text: 'Everything castle-hud saved is deleted. You start again at level 1.' }
+      return { text: 'Everything castle-hud recorded is deleted; your bell and cache settings stay. You start again at level 1.' }
     }
     const all = await syncProfile($, true)
     const p = await read($, profile)

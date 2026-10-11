@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.1
+
+- The level is lettered in the carved capitals and the title in the blackletter, so "LV" no longer reads as "LU" and both fonts are used. The level line is sized so nothing is cut off, even if the fonts can't load.
+- The README's screenshots show the gothic lettering.
+- The licence notices say the fonts stay under the SIL Open Font License while the code is MIT.
+- The reset message says your bell and cache settings stay; the README describes when Claude Code reports the cache life and lists the font files.
+- The font build gives identical output on every run, and the bold fallback is named as bold.
+
 ## 0.12.0
 
 - The level line ("LV 5 Vampire Hunter") is lettered in a gothic blackletter, with carved fantasy capitals as its fallback. Both are open-licensed fonts, trimmed and built into that image; numbers and captions keep the serif.

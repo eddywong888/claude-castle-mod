@@ -14,7 +14,8 @@ TEXT = ''.join(chr(c) for c in range(0x20, 0x7F))  # printable ASCII: the HUD's 
 
 
 def build(src: str, family: str) -> str:
-    font = TTFont(src)
+    # No fresh timestamp: the same sources build the same bytes.
+    font = TTFont(src, recalcTimestamp=False)
     opts = subset.Options()
     opts.flavor = 'woff2'
     opts.layout_features = ['kern', 'liga']
@@ -23,13 +24,17 @@ def build(src: str, family: str) -> str:
     s.populate(text=TEXT)
     s.subset(font)
     # A trimmed font is a modified version: it may not carry the reserved name.
+    style = str(font['name'].getDebugName(2) or 'Regular')  # Regular, Bold: kept as the source names it
     for rec in font['name'].names:
-        if rec.nameID in (1, 4, 16, 21):
+        if rec.nameID in (1, 16, 21):
             rec.string = family
+        elif rec.nameID == 4:
+            rec.string = family if style == 'Regular' else f'{family} {style}'
         elif rec.nameID in (3, 6):
-            rec.string = family.replace(' ', '') + '-Regular'
+            rec.string = family.replace(' ', '') + '-' + style.replace(' ', '')
     out = io.BytesIO()
     font.flavor = 'woff2'
+    font.recalcTimestamp = False
     font.save(out)
     return base64.b64encode(out.getvalue()).decode()
 

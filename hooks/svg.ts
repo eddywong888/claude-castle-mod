@@ -95,10 +95,10 @@ function litMoon(cx: number, cy: number, r: number, light: number): string {
 /** `gothic`: the section's text uses the embedded display fonts, which then travel in its image. */
 type Section = { width: number; body: (x: number) => string; gothic?: boolean }
 
-// The level line's lettering: a blackletter in the Castlevania spirit, carved fantasy capitals in the Warcraft
-// spirit as its fallback, then the band's serif. Both are trimmed OFL fonts embedded in the image that uses them
+// The level line's lettering: the title in a blackletter in the Castlevania spirit, the level in carved fantasy
+// capitals in the Warcraft spirit; each falls back on the other, then the band's serif. Both are trimmed OFL fonts embedded in the image that uses them
 // (an image can't load fonts from the web): see fonts/.
-const GOTHIC_FACES = `@font-face{font-family:'CastleHud Gothic';src:url(data:font/woff2;base64,${GOTHIC_WOFF2}) format('woff2')}@font-face{font-family:'CastleHud Capitals';src:url(data:font/woff2;base64,${CAPITALS_WOFF2}) format('woff2')}.g{font-family:'CastleHud Gothic','CastleHud Capitals',Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif;font-weight:400;letter-spacing:.02em}`
+const GOTHIC_FACES = `@font-face{font-family:'CastleHud Gothic';src:url(data:font/woff2;base64,${GOTHIC_WOFF2}) format('woff2')}@font-face{font-family:'CastleHud Capitals';src:url(data:font/woff2;base64,${CAPITALS_WOFF2}) format('woff2')}.g{font-family:'CastleHud Gothic','CastleHud Capitals',Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif;font-weight:400;letter-spacing:.02em}.cap{font-family:'CastleHud Capitals','CastleHud Gothic',Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif}`
 
 function textBlock(x: number, value: string, caption: string, valueColor = 'var(--ink)'): string {
   return `<text x="${x}" y="27" class="v" fill="${valueColor}">${esc(value)}</text><text x="${x}" y="50" class="c">${esc(caption)}</text>`
@@ -296,13 +296,15 @@ ${sprite(BAG, { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', T
     const xpText = `${p.into} / ${p.need} XP${p.streak > 0 ? `, ${p.streak}-day streak` : ''}`
     const barW = 70
     const fill = Math.max(0, Math.min(1, p.need > 0 ? p.into / p.need : 0))
-    const firstW = value.length * VALUE_W + 8 + name.length * CAPTION_W
+    // The display lettering runs wider than the serif: room for the carved capitals and the blackletter, and for
+    // the serif fallback at these sizes should the fonts not load.
+    const firstW = value.length * 17 + 9 + name.length * 13
     const secondW = barW + 10 + xpText.length * CAPTION_W
     sections.push({
       width: 34 + Math.max(firstW, secondW),
       gothic: true,
       body: x => `<g transform="translate(${x} 0)">${sprite(TITLE_ICONS[p.title] ?? CREST, ICON_COLORS, 0, 14, 3.2)}
-<text x="34" y="27" class="g"><tspan fill="var(--gold)" font-size="27">${esc(value)}</tspan><tspan dx="9" font-size="24" fill="var(--ink)">${esc(name)}</tspan></text>
+<text x="34" y="27" class="g"><tspan class="cap" fill="var(--gold)" font-size="22">${esc(value)}</tspan><tspan dx="9" font-size="24" fill="var(--ink)">${esc(name)}</tspan></text>
 <rect x="34" y="38" width="${barW}" height="7" fill="var(--track)"/><rect x="34" y="38" width="${(barW * fill).toFixed(1)}" height="7" fill="var(--gold)"/><rect x="34" y="38" width="${(barW * fill).toFixed(1)}" height="2" fill="var(--goldLight)"/>
 <text x="${34 + barW + 10}" y="46" class="c">${esc(xpText)}</text></g>`,
     })
