@@ -179,3 +179,9 @@ test('every title has its own icon in the level section', () => {
   expect(crown).not.toContain('#ff8a1f')
   expect(crown).toContain('#ff3b3b') // the vampire lord's red eyes
 })
+
+test('the working cross shows without a profile, and lands at the end of its track', () => {
+  const svg = buildSvg({ usage: null, cache: null, bats: 0, now, prevPercent: 0, mode: 'dark', working: true })
+  expect(svg.alt).toContain('Claude is working')
+  expect(svg.source).toContain('translateX(77.8px)') // 96 minus the 18.2 the cross is wide
+})

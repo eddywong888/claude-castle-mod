@@ -426,3 +426,37 @@ test('a cross is thrown beside the level while Claude works', async ($, on) => {
   await ui.unmount()
   expect(await band($ as never)).toContain('Waiting for you')
 })
+
+const listen = (on: On) => {
+  const played: unknown[] = []
+  on('audio.play', (_$, e) => {
+    played.push(e.clip)
+    return { value: undefined }
+  })
+  return played
+}
+const answered = (id: string) => ({ answer: 'ok', durationMs: 1, isAborted: false, turnId: id, reason: 'answer' }) as never
+
+test('the bell stays quiet in a terminal or headless session', async ($, on) => {
+  const { clock } = world(on)
+  const played = listen(on)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true } as never)
+  await $.turn.complete(answered('t1'))
+  await clock.settle()
+  expect(played.length).toBe(0)
+})
+
+test('muting in another window silences this one, a reply without usage still rings, and reset keeps the mute', async ($, on) => {
+  const { clock, store } = world(on)
+  const played = listen(on)
+  await $.session.start(start as never)
+  await $.turn.complete(answered('t1')) // no usage: still a reply
+  await clock.settle()
+  expect(played.length).toBe(1)
+  store.set('sound', 'off') // another window's /castle sound off
+  await $.turn.complete(answered('t2'))
+  await clock.settle()
+  expect(played.length).toBe(1)
+  await $.command.run({ command: 'castle', args: 'reset confirm' } as never)
+  expect(store.get('sound')).toBe('off')
+})

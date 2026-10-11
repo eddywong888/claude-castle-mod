@@ -428,7 +428,8 @@ function resetAll($: EngineInterface): Promise<void> {
 }
 
 async function wipe($: EngineInterface) {
-  for (const key of await $.store.keys()) await $.store.delete(key)
+  // Your bell setting is a preference, not something the mod recorded: it stays.
+  for (const key of await $.store.keys()) if (key !== SOUND_KEY) await $.store.delete(key)
   mine = emptyStats()
   lastSaved = null
   lastSavedAt = 0
@@ -439,7 +440,6 @@ async function wipe($: EngineInterface) {
   known = null
   seenSpend.clear()
   knownReset = undefined
-  soundOn = undefined
   // This conversation's figures too: kept, the next save would write them back.
   turnLines = 0
   convDirty = false
@@ -518,19 +518,20 @@ async function refreshUsage($: EngineInterface) {
   await noteReset($, fresh)
 }
 
-// The bell when a reply is done: on unless muted, the choice kept across sessions.
+// The bell when a reply is done: on unless muted, the choice kept across sessions. Read at each ring, so muting
+// in one window silences every open one. Rung only in the desktop app, where the band is: not in a terminal,
+// nor in a headless or SDK run.
 const SOUND_KEY = 'sound'
-let soundOn: boolean | undefined
+let bellHere = false
 
 async function soundIsOn($: EngineInterface): Promise<boolean> {
-  if (soundOn === undefined) soundOn = (await $.store.get(SOUND_KEY)) !== 'off'
-  return soundOn
+  return (await $.store.get(SOUND_KEY)) !== 'off'
 }
 
 /** Tolls the bell and organ chord, if the sound is on; a failure to play is silent. */
 async function ringBell($: EngineInterface) {
   try {
-    if (await soundIsOn($)) await $.audio.play({ asset: 'sounds/done.wav' })
+    if (bellHere && (await soundIsOn($))) await $.audio.play({ asset: 'sounds/done.wav' })
   } catch {
     // no player here (a Linux or Windows terminal), or the clip couldn't play
   }
@@ -572,6 +573,7 @@ export const register: Register = on => {
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
+    bellHere = e.surface === 'desktop' && e.isInteractive
     // Each step on its own: one that fails (a store that can't be read, say) leaves the rest running.
     const attempt = async (step: () => Promise<unknown>) => {
       try {
@@ -760,7 +762,6 @@ export const register: Register = on => {
     if (arg === 'sound on' || arg === 'sound off') {
       const enable = arg === 'sound on'
       await $.store.set(SOUND_KEY, enable ? 'on' : 'off')
-      soundOn = enable
       if (enable) void ringBell($)
       return { text: enable ? 'The bell will toll when Claude finishes a reply.' : 'The bell is silent. Type /castle sound on to bring it back.' }
     }
@@ -797,6 +798,8 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
+    // The bell tolls when a reply in the main conversation is done, unless muted with /castle sound off.
+    if (!e.agentId && e.reason === 'answer') void ringBell($)
 
     if (e.agentId) {
       // A subagent we watched answered: it finished, even if the roster drops it before the next reading.
@@ -833,8 +836,6 @@ export const register: Register = on => {
       // Only an answered turn earns XP, counts as finished and marks the day; a cancelled or failed one
       // still counts its lines changed, its cost and its cache.
       const answered = e.reason === 'answer'
-      // The bell tolls when a reply is done, unless muted with /castle sound off.
-      if (answered) void ringBell($)
       mine = answered
         ? {
             ...mine,

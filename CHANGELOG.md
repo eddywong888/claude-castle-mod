@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.2
+
+- The bell rings only in the desktop app: not in a terminal, a headless `claude -p` run or an SDK session.
+- `/castle sound off` in one window silences every open window, and `/castle reset` keeps your choice.
+- A reply finished without a usage count still rings the bell.
+- The working cross shows even before your level has loaded, and turns back exactly at the end of its track.
+
 ## 0.11.1
 
 - The working indicator beside the level is now a thrown cross that spins out along its track and back, so it can't be mistaken for the subagent bats.

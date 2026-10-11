@@ -79,7 +79,7 @@ Each level needs a little more XP than the last. Titles change at level 1 (Wande
 
 Your **streak** counts the days in a row with at least one finished turn. There are 14 **achievements**, from First Blood (your first turn) to Eternal Night (a 30-day streak). A pop-up appears for each level-up and each new achievement.
 
-When Claude finishes a reply, a deep bell tolls under a short organ chord (an original sound made for this mod). Type `/castle sound off` to silence it and `/castle sound on` to bring it back; the choice is remembered. On macOS it plays through the system's audio player.
+When Claude finishes a reply, a deep bell tolls under a short organ chord (an original sound made for this mod). Type `/castle sound off` to silence it and `/castle sound on` to bring it back; the choice is remembered. It rings in the desktop app only, not in a terminal or a scripted run, and muting it in one window mutes every window. `/castle reset` keeps your choice.
 
 Type `/castle` to see your level, where your XP came from and every achievement. Type `/castle reset` to start again from level 1: it asks you to confirm, then deletes everything the mod saved.
 

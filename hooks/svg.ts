@@ -60,10 +60,14 @@ const CREST = ['XXXXXXXX', 'XGGGGGGX', 'XGGRRGGX', 'XGRRRRGX', 'XGGRRGGX', '.XGR
 const STOPWATCH = ['...BB...', '.XXXXXX.', 'XWWWHWWX', 'XWWWHWWX', 'XWWWHHWX', 'XWWWWWWX', 'XWWWWWWX', '.XXXXXX.']
 const BAG = ['..TTTT..', '...XX...', '..XGGX..', '.XGHGGX.', 'XGHGGGGX', 'XGGGGGGX', 'XGGGGGGX', '.XXXXXX.']
 const BAT_UP = ['X........X', 'XX..XX..XX', 'XXXXXXXXXX', '.XXXXXXXX.', '...X..X...']
-// The thrown cross, two frames of its spin: upright, then turned a quarter.
+const BAT_DOWN = ['....XX....', '..XXXXXX..', 'XXXXXXXXXX', 'X..XXXX..X', '....XX....']
+// The thrown cross, two frames of its spin: upright, then turned a quarter; and the track it flies along, out to
+// where its far edge meets the track's end.
 const CROSS_A = ['...X...', '..XSX..', 'XXXSXXX', 'XSSSSSX', 'XXXSXXX', '..XSX..', '...X...']
 const CROSS_B = ['XX...XX', 'XSX.XSX', '.XSXSX.', '..XSX..', '.XSXSX.', 'XSX.XSX', 'XX...XX']
-const BAT_DOWN = ['....XX....', '..XXXXXX..', 'XXXXXXXXXX', 'X..XXXX..X', '....XX....']
+const CROSS_PX = 2.6
+const TRACK = 96
+const THROW = TRACK - (CROSS_A[0]?.length ?? 0) * CROSS_PX
 
 export const zone = (p: number) => (p >= 85 ? 'blood' : p >= 60 ? 'gold' : 'ink')
 
@@ -296,15 +300,15 @@ ${sprite(BAG, { X: 'var(--goldDark)', G: 'var(--gold)', H: 'var(--goldLight)', T
     alt.push(`Level ${p.level}, ${p.title}, ${xpText}`)
   }
 
-  // Working: beside the level, a cross is thrown along a track while Claude works, spinning out and back; it rests
+  // Working: after the level, a cross is thrown along a track while Claude works, spinning out and back; it rests
   // at the start when it's your turn.
-  if (h.profile) {
-    const track = 96
+  {
+    const track = TRACK
     const working = h.working === true
     const fill = working ? { X: 'var(--goldDark)', S: '#e6e1ec' } : { X: 'var(--track)', S: 'var(--stone)' }
     const cross = working
-      ? `<g class="throw"><g class="spinA">${sprite(CROSS_A, fill, 0, 12, 2.6)}</g><g class="spinB">${sprite(CROSS_B, fill, 0, 12, 2.6)}</g></g>`
-      : sprite(CROSS_A, fill, 0, 12, 2.6)
+      ? `<g class="throw"><g class="spinA">${sprite(CROSS_A, fill, 0, 12, CROSS_PX)}</g><g class="spinB">${sprite(CROSS_B, fill, 0, 12, CROSS_PX)}</g></g>`
+      : sprite(CROSS_A, fill, 0, 12, CROSS_PX)
     const caption = working ? 'Claude is working' : 'waiting for you'
     sections.push({
       width: Math.max(track, caption.length * CAPTION_W),
@@ -330,7 +334,7 @@ rect{shape-rendering:crispEdges}
 @keyframes flapA{0%,49.9%{opacity:1}50%,100%{opacity:0}}
 @keyframes flapB{0%,49.9%{opacity:0}50%,100%{opacity:1}}
 .up{animation:flapA .36s steps(1) infinite}.down{opacity:0;animation:flapB .36s steps(1) infinite}
-@keyframes throw{0%{transform:translateX(0)}50%{transform:translateX(78px)}100%{transform:translateX(0)}}
+@keyframes throw{0%{transform:translateX(0)}50%{transform:translateX(${THROW.toFixed(1)}px)}100%{transform:translateX(0)}}
 @keyframes trail{0%{opacity:.15}50%{opacity:.6}100%{opacity:.15}}
 .throw{animation:throw 1.8s ease-in-out infinite}.trail{animation:trail 1.8s ease-in-out infinite}
 .spinA{animation:flapA .16s steps(1) infinite}.spinB{opacity:0;animation:flapB .16s steps(1) infinite}
