@@ -193,6 +193,7 @@ test('the level line carries its own gothic fonts, and only that image does', ()
   const withFonts = svg.parts.filter(p => p.source.includes("font-family:'CastleHud Gothic'"))
   expect(withFonts.length).toBe(1)
   expect(withFonts[0]!.alt).toContain('Vampire Hunter')
-  expect(withFonts[0]!.source).toContain("'CastleHud Capitals'") // the fallback
+  expect(withFonts[0]!.source).toContain("'CastleHud Capitals'") // the level's face, and the title's fallback
+  expect(withFonts[0]!.source).toContain('class="cap"') // the level is lettered in the capitals
   for (const p of svg.parts) expect(p.source.length).toBeLessThan(131_072)
 })

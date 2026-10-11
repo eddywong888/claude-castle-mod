@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.2
+
+- The README's font credits say which font letters the title and which the level; a test checks the level keeps its capitals.
+
 ## 0.12.1
 
 - The level is lettered in the carved capitals and the title in the blackletter, so "LV" no longer reads as "LU" and both fonts are used. The level line is sized so nothing is cut off, even if the fonts can't load.

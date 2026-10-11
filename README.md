@@ -143,7 +143,7 @@ The screenshots and icons are renders of the mod's own drawing code with sample 
 
 ## Fonts
 
-The level line is lettered in two fonts under the SIL Open Font License 1.1: Pirata One by Rodrigo Fuenzalida and Nicolas Massi, with Cinzel Decorative by Natanael Gama as its fallback. The mod carries trimmed copies, renamed CastleHud Gothic and CastleHud Capitals as their licences require, with the licence texts and the build script in `fonts/`. They stay under that licence (see License below).
+The level line is lettered in two fonts under the SIL Open Font License 1.1: Pirata One by Rodrigo Fuenzalida and Nicolas Massi for the title, and Cinzel Decorative by Natanael Gama for the level, each the other's fallback. The mod carries trimmed copies, renamed CastleHud Gothic and CastleHud Capitals as their licences require, with the licence texts and the build script in `fonts/`. They stay under that licence (see License below).
 
 ## License
 
